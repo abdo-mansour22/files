@@ -1,0 +1,4115 @@
+#include <iostream>
+#include <SFML/Graphics.hpp>
+#include <SFML/Audio.hpp>
+#include <vector>
+#include <fstream>
+#include <string>
+using namespace sf;
+using namespace std;
+
+// Tony Code
+
+/*
+        ............Game Sate.................................display................
+        :                                  :                                        :
+        :             (0)                  :                 main menu              :
+        :             (1)                  :                 game options           :
+        :             (2)                  :                 highscore              :
+        :             (3)                  :                 player name            :
+        :             (4)                  :                 show levels            :
+        :             (5)                  :                 level one              :
+        :             (6)                  :                 level two              :
+        :             (7)                  :                 level three            :
+        :             (8)                  :                 pause                  :
+        :             (9)                  :                 after finshing level   :
+        :             (10)                 :                 game over              :
+        :............................................................................
+
+*/
+
+const int size = 23;
+int gameState = 0;
+int tempState = 0;
+int gameStatePrevious = 0;
+
+
+
+struct User {
+    int score;
+    string playerName;
+}user;
+
+// Struct players
+struct player {
+    Sprite sprite;
+    int score;
+    int health = 3;
+    bool dieCheck = 0;
+    int dieTimer = 0;
+
+    float playerFinalVelocity_x;
+    float playerFinalVelocity_y;
+}players[3];
+
+void saveScore(const User& entry)
+{
+    ofstream file("leaderboard.txt", ios::app);
+    if (file.is_open())
+    {
+        file << entry.playerName << " " << entry.score << endl;
+        file.close();
+    }
+    else
+    {
+        cout << "Failed to open leaderboard file for writing" << endl;
+    }
+}
+
+vector<User> loadLeaderboard()
+{
+    vector<User> leaderboard;
+    ifstream file("leaderboard.txt");
+    if (file.is_open())
+    {
+        User entry;
+        while (file >> entry.playerName >> entry.score)
+        {
+            leaderboard.push_back(entry);
+        }
+        file.close();
+    }
+    return leaderboard;
+}
+
+void displayLeaderboard(sf::RenderWindow& window)
+{
+    Texture bgTexture;
+    bgTexture.loadFromFile("levels.png");
+    Sprite bg;
+    bg.setTexture(bgTexture);
+    bg.setOrigin(280, 224.5);
+    bg.setPosition(640, 480);
+    bg.setScale(1.6, 1.6);
+
+    Texture bgText;
+    bgText.loadFromFile("menu1.png");
+    Sprite bg2;
+    bg2.setTexture(bgText);
+    bg2.setOrigin(319.5, 240);
+    bg2.setPosition(640, 480);
+    bg2.setScale(2, 2);
+
+    Font font;
+    if (!font.loadFromFile("Reach-Fill.ttf")) {
+        cout << "Error: Font file not found." << endl;
+        return;
+    }
+
+    // Load the leaderboard from file
+    vector<User> leaderboard = loadLeaderboard();
+
+    // Sort the leaderboard based on scores (descending order)
+    sort(leaderboard.begin(), leaderboard.end(), [](const User& a, const User& b) {
+        return a.score > b.score;
+        });
+
+    // Display the sorted leaderboard on the bottom right of the camera
+    const int fontSize = 50;
+
+    Text leaderboardText("Leaderboard:\n\n", font, fontSize);
+    leaderboardText.setPosition(450, 50);
+
+    // Iterate over each entry
+    for (const auto& entry : leaderboard)
+    {
+        leaderboardText.setString(leaderboardText.getString() + "\n" + entry.playerName + ":  " + to_string(entry.score) + "\n");
+    }
+
+    // Draw the background sprites and leaderboard text
+    window.draw(bg);
+    window.draw(bg2);
+    window.draw(leaderboardText);
+}
+
+
+//Function to set sprites
+void setSprites(Sprite sprites[], const Texture textures[], const Vector2f positions[], const Vector2f scales[], int size) {
+    for (int i = 0; i < size; ++i) {
+        sprites[i].setTexture(textures[i]);
+        sprites[i].setPosition(positions[i]);
+        sprites[i].setScale(scales[i]);
+    }
+}
+
+// Function to create a button
+Text createButton(const string& buttonText, Font& font, int fontSize, const Color& color, float x, float y) {
+    Text button;
+    button.setString(buttonText);
+    button.setFont(font);
+    button.setCharacterSize(fontSize);
+    button.setFillColor(color);
+    button.setPosition(x, y);
+    return button;
+}
+
+// Function to handle button selection
+void setSelected(Text& buttonText, bool isSelected) {
+    if (isSelected) {
+
+        buttonText.setFillColor(Color::Cyan);
+    }
+    else {
+        buttonText.setFillColor(Color::White);
+    }
+}
+
+//Function to set player name
+void Pname(RenderWindow& window, string& name) {
+    if (!name.empty()) {
+        name.clear();
+    }
+    Font font;
+    font.loadFromFile("Reach-Fill.ttf");
+    Text t1, t2;
+    t1.setFont(font);
+    t2.setFont(font);
+    t1.setString("Enter your name");
+    t1.setCharacterSize(50);
+    t2.setCharacterSize(40);
+    t1.setPosition(460, 400);
+    t2.setPosition(550, 450);
+    t1.setFillColor(Color::Green);
+    t2.setFillColor(Color::Green);
+    Texture bgTexture;
+    bgTexture.loadFromFile("levels.png");
+    Sprite bg;
+    Texture bgText;
+    bgText.loadFromFile("menu1.png");
+    Sprite bg2;
+    bg2.setTexture(bgText);
+    bg.setTexture(bgTexture);
+    bg2.setOrigin(319.5, 240);
+    bg2.setPosition(640, 480);
+    bg2.setScale(2, 2);
+    bg.setOrigin(280, 224.5);
+    bg.setPosition(640, 480);
+    bg.setScale(1.6, 1.6);
+
+
+    while (window.isOpen()) {
+        Event event;
+        while (window.pollEvent(event)) {
+            if (event.type == Event::Closed) {
+                window.close();
+            }
+            if (event.type == Event::TextEntered) {
+                if (event.text.unicode == '\b' && !name.empty()) {
+                    name.pop_back(); // Backspace handling
+                }
+                else if (event.text.unicode < 128) {
+                    name += static_cast<char>(event.text.unicode); // Add typed characters to name
+                }
+            }
+            if (event.type == Event::KeyPressed) {
+                if (event.key.code == Keyboard::Enter && name.size() > 1) {
+                    gameState = 4;
+                    return;
+                }
+                else if (event.key.code == Keyboard::Escape) {
+                    // Escape key pressed, return to main menu
+                    gameState = 0;
+                    return;
+                }
+            }
+        }
+        t2.setString(name);
+        window.clear();
+        window.draw(bg2);
+        window.draw(bg);
+        window.draw(t1);
+        window.draw(t2);
+        window.display();
+    }
+
+
+}
+
+
+
+
+// Sohaib Code-----------------------------------------------------------------------------------------------------------
+// Global things------------------------------------------------------------------------------------------------------
+int windowWidth = 1280;
+int windowHeight = 960;
+View view[3];
+
+Sprite bubble;
+Sprite bubble2;
+Sprite bubbles[5];
+vector<Sprite> BubblesInBack;
+
+Text plus_10;  // ScoreEffect Line (461)
+Text plus_20;
+Text plus_30;
+vector<Text> T1[3];
+float length;
+Vector2f dir;
+
+Sprite star;
+vector<Sprite> stars[3];
+int spwanTimerStars = 240;
+vector<int> smallStarsTimers[3];
+Sprite smalStarw;
+Sprite smalStary;
+vector<Sprite> smallStars[3];
+vector<int> counter[3]; // Number of smallStars Now
+Sprite spark1;
+vector<Sprite> sparks1[3];
+vector<int> countSpark1[3]; // Number of Sparks Now
+vector <int> sparksTimer[3];
+
+Sprite Speed;
+vector<Sprite> speeds;
+int spwanTimerSpeed = 0;
+
+Sound bS;  // bite Star
+Sound bite1Sound;  // bite 1
+
+
+Sprite Yum;
+Sprite Gulb;
+
+Sound feddingFren;
+Sound doubleFrenzy;
+
+Text OnFireText;
+
+// Wining effect
+Sprite Bubs[3][7];
+Text Perfect[3][7];
+int PerfectTime[3] = { 0 };
+int endPerfect[3] = { 0 };
+Sound winSound;
+int finishingTime[3] = { 0 };
+// Losing effect
+Sprite Bubs1[3][5];
+Text Sorry[3][5];
+int SorryTime[3] = { 0 };
+int endSorry[3] = { 0 };
+Sound losSound;
+Sound dieSound;
+
+bool TurboCheck = 0;
+int TurboTime = 0;
+Vector2f turboVelocity = Vector2f(0, 0);
+
+Sound dashSound;
+
+int hb_score[3] = { 0 };
+
+
+// Shehab Struct
+const int max_fishes = 200;
+struct Enemies {
+    Texture texture_enemy;
+    Sprite sprite_enemy;
+    vector<Sprite>enemies;
+    Vector2f movement[max_fishes];
+    int movement_time;
+    int push_back_timer;
+    int width;
+    int height;
+    float swimming_counter[max_fishes];
+    float turn1[max_fishes];
+    float turn2[max_fishes];
+    float eating_counter[max_fishes];
+    bool not_eating[max_fishes];
+};
+Enemies enemy[3][3];
+int Direction[3]{ -1,0,1 };
+float movement_increment[10] = { 0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1 };
+
+
+// Functions------------------------------------------------------------------------------------------------------
+void direction(float mPxc, float mPxp, float mPyc, float mPyp, bool c, int& dix, int& diy, bool& Tr, bool& Tl)
+{
+    // Determine the direction
+    if (mPxc > mPxp && c == 1)
+    {
+        if (dix == -1)
+        {
+            Tr = 1;
+        }
+        dix = 1;
+    }
+    else if (mPxc < mPxp && c == 1)
+    {
+        if (dix == 1)
+        {
+            Tl = 1;
+        }
+        dix = -1;
+    }
+
+    if (mPyc > mPyp && c == 1)
+    {
+        diy = 1;
+    }
+    else if (mPyc < mPyp && c == 1)
+    {
+        diy = -1;
+    }
+}
+
+void velocity_x(int dix, bool c, float mPxc, float mPxp, int vm, float& vx)
+{
+    if (dix == 1)
+    {
+        if (c == 1)
+        {
+            if (vx + (mPxc - mPxp) / 15 < vm)   // limit the velocity
+                vx += (mPxc - mPxp) / 15;
+        }
+
+
+
+    }
+    if (dix == -1)
+    {
+        if (c == 1)
+        {
+            if (vx + (mPxc - mPxp) / 15 > -vm)    // limit the velocity
+                vx += (mPxc - mPxp) / 15;
+        }
+
+    }
+    // Reduce the velocity.x
+    if (vx > 0)
+        vx -= 0.1;
+    else if (vx < 0)
+        vx += 0.1;
+}
+
+void velocity_y(int diy, bool c, float mPyc, float mPyp, int vm, float& vy)
+{
+    if (diy == 1)
+    {
+        if (c == 1)
+        {
+            if (vy + (mPyc - mPyp) / 20 < vm)
+                vy += (mPyc - mPyp) / 20;
+        }
+    }
+    else if (diy == -1)
+    {
+        if (c == 1)
+        {
+            if (vy + (mPyc - mPyp) / 20 > -vm)
+                vy += (mPyc - mPyp) / 20;
+        }
+    }
+
+    // Reduce the velocity.y
+    if (vy > 0)
+        vy -= 0.1;
+    else if (vy < 0)
+        vy += 0.1;
+}
+
+void limitV(float& vx, float& vy, int vm)
+{
+    if (sqrt(vx * vx + vy * vy) >= vm)
+    {
+        vx = vx / sqrt(2);
+        vy = vy / sqrt(2);
+    }
+}
+
+void makeBubblesWhenEating(Sprite p, Vector2f& playerP, bool& EB, double& bubbsT, int& dix)
+{
+    // bubbels
+    if (EB == 1)
+    {
+        if (bubbsT <= 10)
+        {
+            if (bubbsT == 0)
+            {
+                bubbles[0].setScale(0.4f, 0.4f);
+                playerP = p.getPosition();
+                if (dix == 1)
+                    bubbles[0].setPosition(playerP.x + p.getGlobalBounds().width - 15, playerP.y + p.getGlobalBounds().height / 2);
+                else
+                    bubbles[0].setPosition(playerP.x - 15, playerP.y + p.getGlobalBounds().height / 2);
+            }
+            if (bubbsT >= 0.9 && bubbsT <= 1.2)
+            {
+                bubbles[1].setScale(0.4f, 0.4f);
+                if (dix == 1)
+                    bubbles[1].setPosition(playerP.x + p.getGlobalBounds().width, playerP.y + p.getGlobalBounds().height / 2);
+                else
+                    bubbles[1].setPosition(playerP.x, playerP.y + p.getGlobalBounds().height / 2);
+            }
+            if (bubbsT >= 1.8 && bubbsT <= 2.1)
+            {
+                bubbles[2].setScale(0.4f, 0.4f);
+                if (dix == 1)
+                    bubbles[2].setPosition(playerP.x + p.getGlobalBounds().width + 20, playerP.y + p.getGlobalBounds().height / 2);
+                else
+                    bubbles[2].setPosition(playerP.x + 20, playerP.y + p.getGlobalBounds().height / 2);
+            }
+            if (bubbsT >= 2.7 && bubbsT <= 3)
+            {
+                bubbles[3].setScale(0.3f, 0.3f);
+                if (dix == 1)
+                    bubbles[3].setPosition(playerP.x + p.getGlobalBounds().width + 15, playerP.y + p.getGlobalBounds().height / 2);
+                else
+                    bubbles[3].setPosition(playerP.x + 15, playerP.y + p.getGlobalBounds().height / 2);
+            }
+            if (bubbsT >= 5.1 && bubbsT <= 5.4)
+            {
+                bubbles[4].setScale(0.4f, 0.4f);
+                if (dix == 1)
+                    bubbles[4].setPosition(playerP.x + p.getGlobalBounds().width - 5, playerP.y + p.getGlobalBounds().height / 2);
+                else
+                    bubbles[4].setPosition(playerP.x - 5, playerP.y + p.getGlobalBounds().height / 2);
+            }
+
+
+            for (int i = 0; i < 5; i++)
+            {
+                bubbles[i].move(0, -1);
+            }
+            bubbsT += 0.3;
+        }
+        else // bubbules die
+        {
+            for (int i = 0; i < 5; i++)
+            {
+                bubbles[i].setScale(0, 0);
+            }
+            bubbsT = 0;
+            EB = 0;
+        }
+    }
+}
+
+void CollisionWithWindow(Sprite& p, RenderWindow& window, View view)
+{
+    // Collision with window
+    if (p.getPosition().x < p.getGlobalBounds().width / 2 - 10)
+        p.setPosition(p.getGlobalBounds().width / 2 - 10, p.getPosition().y);
+
+    if (p.getPosition().y < 127 + (p.getGlobalBounds().height / 2) - 10)
+        p.setPosition(p.getPosition().x, 127 + (p.getGlobalBounds().height / 2) - 10);
+
+    if (p.getPosition().x > window.getSize().x - p.getGlobalBounds().width / 2 - 20)
+        p.setPosition(window.getSize().x - p.getGlobalBounds().width / 2 - 20, p.getPosition().y);
+
+    if (p.getPosition().y > window.getSize().y - p.getGlobalBounds().height / 2 - 15 + (127))
+        p.setPosition(p.getPosition().x, window.getSize().y - p.getGlobalBounds().height / 2 - 15 + 127);
+}
+
+void KeepMouseInWindow(Vector2f mousePosition, RenderWindow& window, Vector2f windowPo, bool& c, float& mPyc, float& mPxc)
+{
+    // keep mouse in window
+    if (mousePosition.x > window.getSize().x - 20)
+    {
+        Mouse::setPosition(Vector2i(0 + windowPo.x + 30, mousePosition.y + windowPo.y + 30));
+        c = 0;
+    }
+    if (mousePosition.x < 20)
+    {
+        Mouse::setPosition(Vector2i(window.getSize().x + windowPo.x - 30, mousePosition.y + windowPo.y + 30));
+        c = 0;
+        mPxc = Mouse::getPosition().x;
+    }
+    if (mousePosition.y > window.getSize().y - 50)
+    {
+        Mouse::setPosition(Vector2i(mousePosition.x + windowPo.x + 8, 0 + windowPo.y + 40));
+        c = 0;
+
+        mPyc = Mouse::getPosition().y;
+    }
+    if (mousePosition.y < 20)
+    {
+        Mouse::setPosition(Vector2i(mousePosition.x + windowPo.x + 8, window.getSize().y + windowPo.y - 60));
+        c = 0;
+
+        mPyc = Mouse::getPosition().y;
+    }
+}
+
+void ScoreEffectControl(RenderWindow& window)
+{
+    // Score effect
+    for (int i = 0; i < T1[gameState - 5].size(); i++)
+    {
+        Vector2f dir = Vector2f(1080, 40) - Vector2f(T1[gameState - 5][i].getPosition().x, T1[gameState - 5][i].getPosition().y);
+        length = sqrt((dir.x * dir.x) + (dir.y * dir.y));
+        dir /= length;
+
+        T1[gameState - 5][i].move(5 * dir.x, 5 * dir.y);
+        if (T1[gameState - 5][i].getPosition().x >= 1075 && T1[gameState - 5][i].getPosition().y <= 45)
+        {
+            T1[gameState - 5].erase(T1[gameState - 5].begin() + i);
+        }
+    }
+}
+
+void ScoreEffectCreate(View view, int dix, Sprite p, float x, int N)
+{
+    plus_10.setString("+" + to_string((int)x * N));
+    if (dix == -1)
+        plus_10.setPosition((p.getPosition().x) * 1.24 - 1.24 * (view.getCenter().x - view.getSize().x / 2), (p.getPosition().y + p.getGlobalBounds().height / 2) * 1.24 - 1.24 * (view.getCenter().y - view.getSize().y / 2));
+    else
+        plus_10.setPosition((p.getPosition().x + p.getGlobalBounds().width) * 1.24 - 1.24 * (view.getCenter().x - view.getSize().x / 2), (p.getPosition().y + p.getGlobalBounds().height / 2) * 1.24 - 1.24 * (view.getCenter().y - view.getSize().y / 2));
+    T1[gameState - 5].push_back(plus_10);
+}
+
+void CreateStars(vector<int>& count)
+{
+    // Create Stars
+    if (spwanTimerStars == 400)
+    {
+        star.setPosition(rand() % (windowWidth - 40), windowHeight);
+        stars[gameState - 5].push_back(star);
+        spwanTimerStars = 0;
+        smallStarsTimers[gameState - 5].push_back(0);
+        counter[gameState - 5].push_back(0);
+        count.push_back(0);
+        sparksTimer[gameState - 5].push_back(0);
+        countSpark1[gameState - 5].push_back(0);
+    }
+    spwanTimerStars++;
+}
+
+void CreateSmallStars(vector<int>& count)
+{
+    // Create small Stars to Each Big Star
+    for (int i = 0; i < stars[gameState - 5].size(); i++)
+    {
+        if (smallStarsTimers[gameState - 5][i] == 10)
+        {
+            smalStarw.setPosition(rand() % 40 + stars[gameState - 5][i].getPosition().x - 15, stars[gameState - 5][i].getPosition().y + 30); // set its position to Big star
+            smalStary.setPosition(rand() % 40 + stars[gameState - 5][i].getPosition().x - 15, stars[gameState - 5][i].getPosition().y + 30); // set its position to Big star
+            if (count[i] % 2 == 0)  // make a wight small star in one time
+                smallStars[gameState - 5].push_back(smalStarw);
+            if (count[i] % 2 == 1) // make a yellow small star in onother time
+                smallStars[gameState - 5].push_back(smalStary);
+            counter[gameState - 5][i] += 1;
+            if (counter[gameState - 5][i] >= 8)  // start Removing small Stars after they be 8 stars
+            {
+                if (counter[gameState - 5][i] % 2 == 0)
+                    smallStars[gameState - 5].erase(smallStars[gameState - 5].begin() + 0);
+                if (counter[gameState - 5][i] % 2 == 1)
+                    smallStars[gameState - 5].erase(smallStars[gameState - 5].begin() + 1);
+                counter[gameState - 5][i]--;
+            }
+            smallStarsTimers[gameState - 5][i] = 0;
+            count[i]++;
+        }
+    }
+    for (int i = 0; i < smallStarsTimers[gameState - 5].size(); i++)
+        smallStarsTimers[gameState - 5][i]++;
+}
+
+void CreateSparks()
+{
+    // Create Sparks to Each Big Star
+    for (int i = 0; i < stars[gameState - 5].size(); i++)
+    {
+        if (sparksTimer[gameState - 5][i] == 30)
+        {
+            spark1.setPosition(rand() % 55 + stars[gameState - 5][i].getPosition().x - 20, stars[gameState - 5][i].getPosition().y + star.getGlobalBounds().height - 20); // set its position to Big star
+            sparks1[gameState - 5].push_back(spark1);
+            countSpark1[gameState - 5][i]++;
+            // Delete Sparks
+            if (countSpark1[gameState - 5][i] > 4)
+            {
+                sparks1[gameState - 5].erase(sparks1[gameState - 5].begin() + 0);
+                countSpark1[gameState - 5][i]--;
+            }
+            sparksTimer[gameState - 5][i] = 0;
+        }
+
+    }
+    for (int i = 0; i < sparksTimer[gameState - 5].size(); i++)
+        sparksTimer[gameState - 5][i]++;
+}
+
+void MoveStars_SmallStars_Sparks()
+{
+    // Move Stars
+    for (int i = 0; i < stars[gameState - 5].size(); i++)
+    {
+        stars[gameState - 5][i].move(0, -2);
+    }
+    // move Small Stars
+    for (int i = 0; i < smallStars[gameState - 5].size(); i++)
+    {
+        smallStars[gameState - 5][i].move(0, 1);
+    }
+    // move Sparks
+    for (int i = 0; i < sparks1[gameState - 5].size(); i++)
+    {
+        sparks1[gameState - 5][i].move(0, -1.8);
+    }
+}
+
+void EatStars(View view, player& p, vector<int>& count, bool& E, bool& EB, int dix, int& scoreNumber, float OnFire1Score, int starsNumberEaten[])
+{
+    for (int i = 0; i < stars[gameState - 5].size(); i++)
+    {
+        if (p.sprite.getGlobalBounds().intersects(stars[gameState - 5][i].getGlobalBounds()) && players[gameState - 5].dieCheck == 0)
+        {
+            bS.play();
+            E = 1;
+            EB = 1;
+            stars[gameState - 5].erase(stars[gameState - 5].begin() + i);
+            smallStarsTimers[gameState - 5].erase(smallStarsTimers[gameState - 5].begin());
+            smallStars[gameState - 5].clear();
+            counter[gameState - 5].erase(counter[gameState - 5].begin() + 0);
+            count.erase(count.begin() + 0);
+            bite1Sound.play();
+            scoreNumber = 40;
+            p.score += scoreNumber * (int)OnFire1Score;
+            starsNumberEaten[gameState - 5]++;
+
+            ScoreEffectCreate(view, dix, p.sprite, OnFire1Score, scoreNumber);
+            sparks1[gameState - 5].clear();
+
+            countSpark1[gameState - 5].erase(countSpark1[gameState - 5].begin() + 0);
+            sparksTimer[gameState - 5].erase(sparksTimer[gameState - 5].begin() + 0);
+        }
+    }
+}
+
+void OnFire(float& OnFire1Score, float& OnFire1ScorePrev, bool& c1, bool& c2, Sprite p, bool& OnFire1Check, int& OnFire1Timer)
+{
+    // checks On fire
+    if (OnFire1Score >= 2 && OnFire1ScorePrev <= 2)
+    {
+        c1 = 1;
+    }
+    if (OnFire1Score >= 3 && OnFire1ScorePrev <= 3)
+    {
+        c2 = 1;
+    }
+    if (c1 == 1 || c2 == 1)
+    {
+        if (c1 == 1)
+        {
+            feddingFren.play();
+            Yum.setPosition(p.getPosition().x, p.getPosition().y);
+        }
+        if (c2 == 1)
+        {
+            doubleFrenzy.play();
+            Gulb.setPosition(p.getPosition().x, p.getPosition().y);
+        }
+        OnFire1Check = 1;
+    }
+
+    if (OnFire1Check == 1)
+    {
+        if (OnFire1Timer <= 60)
+        {
+            OnFire1Timer++;
+            if (c1 == 1)
+                Yum.setScale(1, 1);
+            if (c2 == 1)
+                Gulb.setScale(1, 1);
+        }
+        else
+        {
+            Yum.setScale(0, 0);
+            Gulb.setScale(0, 0);
+            OnFire1Timer = 0;
+            OnFire1Check = 0;
+        }
+    }
+    // Reducing OnFire Score by Time
+    if (OnFire1Score - 0.002 > 1)
+        OnFire1Score -= 0.002;
+
+    // Reset Checks
+    c1 = 0;
+    c2 = 0;
+
+    // Texture Number Of X
+    OnFireText.setString(to_string((int)OnFire1Score) + "x");
+    if ((int)OnFire1Score == 2)
+        OnFireText.setFillColor(Color::Green);
+    else if ((int)OnFire1Score == 3)
+        OnFireText.setFillColor(Color::Red);
+    else if ((int)OnFire1Score == 1)
+        OnFireText.setFillColor(Color::White);
+}
+
+void PerfectDisplay(Music& music)
+{
+    for (int i = 0; i < endPerfect[gameState - 5]; i++)
+    {
+        Perfect[gameState - 5][i].setScale(1, 1);
+        Bubs[gameState - 5][i].setScale(1.5, 1.5);
+        if (Perfect[gameState - 5][i].getPosition().y < 520)
+        {
+            Perfect[gameState - 5][i].move(0, 0.4);
+            Bubs[gameState - 5][i].move(0, 0.4);
+        }
+    }
+    if (PerfectTime[gameState - 5] >= 20)
+    {
+        if (endPerfect[gameState - 5] < 7)
+            endPerfect[gameState - 5]++;
+        PerfectTime[gameState - 5] = 0;
+    }
+    if (finishingTime[gameState - 5] == 1)
+    {
+        winSound.play();
+    }
+    music.stop();
+}
+
+void SorryDisplay(Music& music)
+{
+    for (int i = 0; i < endSorry[gameState - 5]; i++)
+    {
+        Sorry[gameState - 5][i].setScale(1, 1);
+        Bubs1[gameState - 5][i].setScale(1.5, 1.5);
+        if (Sorry[gameState - 5][i].getPosition().y < 520)
+        {
+            Sorry[gameState - 5][i].move(0, 0.4);
+            Bubs1[gameState - 5][i].move(0, 0.4);
+
+        }
+    }
+    if (SorryTime[gameState - 5] >= 20)
+    {
+        if (endSorry[gameState - 5] < 5)
+            endSorry[gameState - 5]++;
+        SorryTime[gameState - 5] = 0;
+    }
+
+    if (finishingTime[gameState - 5] == 1)
+        losSound.play();
+
+    if (players[gameState - 5].dieTimer == 1)
+        dieSound.play();
+
+    music.stop();
+}
+
+void Turbo(float vx, float vy)
+{
+    // Turbo
+
+
+
+    if (Mouse::isButtonPressed(Mouse::Left) && TurboCheck == 0)
+    {
+        TurboCheck = 1;
+
+        // direction
+        turboVelocity = Vector2f(vx / sqrt(vx * vx + vy * vy), vy / sqrt(vx * vx + vy * vy));
+
+        turboVelocity.x = turboVelocity.x * 8;
+        turboVelocity.y = turboVelocity.y * 8;
+        dashSound.play();
+    }
+
+
+
+    if (TurboCheck == 1)
+    {
+        TurboTime++;
+        if (TurboTime < 50)
+        {
+            // reducing turbo Velocity
+            if (turboVelocity.x > 0)
+                turboVelocity.x -= 0.15;
+            else
+                turboVelocity.x += 0.15;
+            if (turboVelocity.y > 0)
+                turboVelocity.y -= 0.15;
+            else
+                turboVelocity.y += 0.15;
+        }
+        else
+        {
+            turboVelocity.x = 0;
+            turboVelocity.y = 0;
+            TurboTime = 0;
+            TurboCheck = 0;
+        }
+    }
+}
+
+void SpeedEffect()
+{
+    // Create Stars
+    if (spwanTimerSpeed == 240)
+    {
+        Speed.setPosition(rand() % (windowWidth - 40), windowHeight);
+        speeds.push_back(Speed);
+        spwanTimerSpeed = 0;
+    }
+    spwanTimerSpeed++;
+
+    // Move Speed Effect
+    for (int i = 0; i < speeds.size(); i++)
+    {
+        speeds[i].move(0, -3);
+    }
+}
+
+void VIEW(Sprite p, float vx, float vy, Sprite items[3][10], int itemsNumber[3])
+{
+    // Moving view
+
+        //  ---->
+    if (p.getPosition().x > view[gameState - 5].getCenter().x + view[gameState - 5].getSize().x / 4 && view[gameState - 5].getCenter().x < windowWidth - (view[gameState - 5].getSize().x / 2))
+    {
+        if (view[gameState - 5].getCenter().x + vx <= windowWidth - (view[gameState - 5].getSize().x / 2))
+        {
+            view[gameState - 5].move(vx, 0);
+            for (int i = 0; i < itemsNumber[gameState - 5]; i++)
+                items[gameState - 5][i].move(-vx / 2.f, 0);
+
+        }
+        else
+        {
+            view[gameState - 5].move(windowWidth - (view[gameState - 5].getSize().x / 2) - view[gameState - 5].getCenter().x, 0);
+            for (int i = 0; i < itemsNumber[gameState - 5]; i++)
+                items[gameState - 5][i].move(-(windowWidth - (view[gameState - 5].getSize().x / 2) - view[gameState - 5].getCenter().x) / 3.f, 0);
+        }
+
+    }
+    // Down
+    if (p.getPosition().y > view[gameState - 5].getCenter().y + view[gameState - 5].getSize().y / 4 && view[gameState - 5].getCenter().y < windowHeight - (view[gameState - 5].getSize().y / 2) + 127)
+    {
+
+        if (view[gameState - 5].getCenter().y + vy <= windowHeight - (view[gameState - 5].getSize().y / 2) + 127)
+            view[gameState - 5].move(0, vy);
+        else
+            view[gameState - 5].move(0, windowHeight - (view[gameState - 5].getSize().y / 2) + 127 - view[gameState - 5].getCenter().y);
+    }
+
+    //  <----
+    if (p.getPosition().x < view[gameState - 5].getCenter().x - view[gameState - 5].getSize().x / 4 && view[gameState - 5].getCenter().x >(view[gameState - 5].getSize().x / 2))
+    {
+
+        if (view[gameState - 5].getCenter().x + vx >= (view[gameState - 5].getSize().x / 2))
+        {
+            view[gameState - 5].move(vx, 0);
+            for (int i = 0; i < itemsNumber[gameState - 5]; i++)
+                items[gameState - 5][i].move(-vx / 2.f, 0);
+        }
+        else
+        {
+            view[gameState - 5].move((view[gameState - 5].getSize().x / 2) - view[gameState - 5].getCenter().x, 0);
+            for (int i = 0; i < itemsNumber[gameState - 5]; i++)
+                items[gameState - 5][i].move(-((view[gameState - 5].getSize().x / 2) - view[gameState - 5].getCenter().x) / 3.f, 0);
+        }
+
+    }
+    // Up
+    if (p.getPosition().y < view[gameState - 5].getCenter().y - view[gameState - 5].getSize().y / 4 + 127 && view[gameState - 5].getCenter().y >(view[gameState - 5].getSize().y / 2) + 5)
+    {
+        if (view[gameState - 5].getCenter().y + vy >= (view[gameState - 5].getSize().y / 2) + 5)
+            view[gameState - 5].move(0, vy);
+        else
+            view[gameState - 5].move(0, (view[gameState - 5].getSize().y / 2) + 5 - view[gameState - 5].getCenter().y);
+    }
+
+}
+
+void BoomExplosion(Sprite& boomEffects, vector <Sprite>& booms, int i, vector <int>& boomsStopPosition, vector <int>& boomsTimerLife, Sound& boomSound, bool& boomsCheck)
+{
+    boomSound.play();
+    boomEffects.setPosition(booms[i].getPosition().x - 5, booms[i].getPosition().y - 5);
+    booms[i].setScale(0, 0);
+    boomsCheck = 1;
+
+}
+
+//main
+int main() {
+
+    RenderWindow window(VideoMode(1280, 960), "Frenzy Fish", Style::Fullscreen);
+    srand(time(0));
+    window.setFramerateLimit(60);
+
+    // Tony Code -------------------------------------------------------------------------------------
+    Font font;
+    if (!font.loadFromFile("SuperMario256.ttf")) {
+        return EXIT_FAILURE;
+    }
+    string name;
+
+    vector<User> leaderboard = loadLeaderboard();
+    //leaderBoard
+    Text leaderboardText("", font, 20);
+    leaderboardText.setFillColor(Color::White);
+    leaderboardText.setPosition(10, 10); // Adjust position
+    Text scoreText("Score: 0", font, 20);
+    scoreText.setFillColor(Color::White);
+
+    Texture textures[23];
+    textures[0].loadFromFile("menu1.png");
+    textures[1].loadFromFile("title.png");
+    textures[2].loadFromFile("1.png");
+    textures[3].loadFromFile("exit1.png");
+    textures[4].loadFromFile("3.png");
+    textures[5].loadFromFile("highscore1.png");
+    textures[6].loadFromFile("l1selected.png");
+    textures[7].loadFromFile("l1selected.png");
+    textures[8].loadFromFile("2.png");
+    textures[9].loadFromFile("exit2.png");
+    textures[10].loadFromFile("gameoptions2.png");
+    textures[11].loadFromFile("highscore2.png");
+    textures[12].loadFromFile("l1unselected.png");
+    textures[13].loadFromFile("l1unselected.png");
+    textures[14].loadFromFile("menu1.png");
+    textures[15].loadFromFile("menu1.png");
+    textures[16].loadFromFile("level 3.2.png");
+    textures[17].loadFromFile("pause.png");
+    textures[18].loadFromFile("mute.png");
+    textures[19].loadFromFile("unmute.jpg");
+    textures[20].loadFromFile("level 2.png");
+    textures[21].loadFromFile("l1selected.png");
+    textures[22].loadFromFile("l1unselected.png");
+
+    // Create sprites
+    Sprite sprites[23];
+    sprites[0].setOrigin(319.5, 240);
+    sprites[1].setOrigin(103, 41);
+    sprites[14].setOrigin(319.5, 240);
+    sprites[16].setOrigin(398.5, 300);
+    sprites[17].setOrigin(226, 195.5);
+    sprites[20].setOrigin(398.5, 300);
+
+
+    Vector2f positions[23] = {
+        Vector2f(640,480),  //0
+        Vector2f(640,150),  //1
+        Vector2f(400,300),  //2
+        Vector2f(800,700),  //3
+        Vector2f(800,450),  //4
+        Vector2f(400,600),  //5
+        Vector2f(450,230),  //6
+        Vector2f(750,710),  //7
+        Vector2f(402,297),  //8
+        Vector2f(793,697),  //9
+        Vector2f(802,452),  //10
+        Vector2f(403,600),  //11
+        Vector2f(450,230),  //12
+        Vector2f(750,710),  //13
+        Vector2f(640,240),  //14
+        Vector2f(300,300),  //15
+        Vector2f(960,750),  //16
+        Vector2f(640,480),  //17
+        Vector2f(700,370),  //18
+        Vector2f(700,370),  //19
+        Vector2f(300,750),  //20
+        Vector2f(100,700),  //21
+        Vector2f(100,700),  //22
+    };
+    Vector2f scales[23] = {
+        Vector2f(2,2),         //0                             
+        Vector2f(2,2),         //1     
+        Vector2f(1.6,1.6),     //2 
+        Vector2f(1.7,1.7),     //3 
+        Vector2f(1.7,1.7),     //4 
+        Vector2f(1.7,1.7),     //5 
+        Vector2f(3.1,2.4),     //6 
+        Vector2f(3.1,2.4),     //7 
+        Vector2f(1.6,1.6),     //8 
+        Vector2f(1.7,1.7),     //9 
+        Vector2f(1.7,1.7),     //10 
+        Vector2f(1.7,1.7),     //11 
+        Vector2f(3.1,2.4),     //12 
+        Vector2f(3.1,2.4),     //13 
+        Vector2f(2,1.2),       //14     
+        Vector2f(1,1),         //15 
+        Vector2f(0.9,0.74),    //16 
+        Vector2f(2.8,2.4),     //17 
+        Vector2f(0.5,0.5),     //18 
+        Vector2f(0.3,0.3),     //19 
+        Vector2f(0.75,0.74),   //20 
+        Vector2f(3.1,2.4),     //21 
+        Vector2f(3.1,2.4),     //22 
+    };
+    setSprites(sprites, textures, positions, scales, 23);
+
+    // Create buttons
+    bool b1l = 0, b2l = 0, b3l = 0, b4l = 0;
+    bool b5l = 0, b6l = 0, b12l = 0;
+    bool b7l = 0, b8l = 0, b9l = 0, b10l = 0;
+    bool b11l = 0, b20l = 0;
+
+
+    Text continueButton = createButton("Continue", font, 60, Color::White, 400, 300);
+    Text exitButton = createButton("Exit", font, 50, Color::White, 400, 600);
+    Text l1Button = createButton("     Level 1\n(Sunken Treasure)", font, 35, Color::Blue, 480, 240);
+    Text l2Button = createButton("   level 2\n(pottery cave)", font, 40, Color::Blue, 140, 710);
+    Text l3Button = createButton(" Level 3\n(Deap Sea)", font, 40, Color::Blue, 850, 720);
+    Text mainmenuButton = createButton("Main Menu", font, 55, Color::White, 400, 400);
+    Text levelButton = createButton("Levels", font, 55, Color::White, 400, 500);
+    Text muteButton = createButton("Mute", font, 35, Color::White, 400, 400);
+    Text escapeButton = createButton("Press ESC to go back", font, 20, Color::White, 20, 30);
+    Text Pbutton = createButton("Press p to pause", font, 20, Color::White, 30, 930);
+
+
+    // Music
+    Music Menumusic;
+    Menumusic.openFromFile("Feeding Frenzy - Menu Track.wav");
+    Menumusic.play();
+    bool isMuted = false;
+    float MenuMusicTime = 0;
+
+
+    // mouse
+    RectangleShape mouse;
+    mouse.setSize(Vector2f(10, 10));
+
+    //-------------------------------------------------------------------------------------------------------------------------------------------------------------------
+    //-------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+    // Sohaib Diclarations ---------------------------------------------------------------------------------------------
+    view[0].setSize(Vector2f(windowWidth / 1.24, windowHeight / 1.24));
+    view[0].setCenter(windowWidth / 2, 5 + view[0].getSize().y / 2);
+    view[1] = view[0];
+    view[2] = view[0];
+
+
+    // BackGround
+    Texture back;
+    if (!back.loadFromFile("sea1.png"))
+        return EXIT_FAILURE;
+    Sprite background[3];
+    background[0].setTexture(back);
+    background[0].setPosition(0, 127);
+
+    Texture back2;
+    if (!back2.loadFromFile("level 3.png"))
+        return EXIT_FAILURE;
+    background[2].setTexture(back2);
+    background[2].setPosition(0, 127);
+    // Players
+
+     // player 1
+    Texture player1;
+    if (!player1.loadFromFile("p.png"))
+        return EXIT_FAILURE;
+    players[0].sprite.setTexture(player1);
+    float playerSheetWidth1 = 122, playerSheetHeight1 = 104;     // player1  ( width, height )
+    float movingAnimationTime = 0;    // counter of animation
+    players[0].sprite.setScale(0.6, 0.6);
+    players[0].sprite.setTextureRect(IntRect(125, 214, -playerSheetWidth1, playerSheetHeight1));
+    players[0].sprite.setOrigin(players[0].sprite.getGlobalBounds().width / 2, players[0].sprite.getGlobalBounds().height / 2);
+
+
+    Texture player2;
+    if (!player2.loadFromFile("p2.png"))
+        return EXIT_FAILURE;
+    players[1].sprite.setTexture(player2);
+    int playerWidth2 = 172, playerHeight2 = 152;     // player3  ( width, height )
+    players[1].sprite.setScale(players[0].sprite.getGlobalBounds().width / 186, players[0].sprite.getGlobalBounds().height / 166);
+    players[1].sprite.setTextureRect(IntRect(102, 324, playerWidth2, playerHeight2));
+    players[1].sprite.setOrigin(players[1].sprite.getGlobalBounds().width / 2, players[1].sprite.getGlobalBounds().height / 2);
+    players[1].sprite.setPosition(windowWidth / 2, 150);
+
+
+
+    Texture player3;
+    if (!player3.loadFromFile("p3.v2.png"))
+        return EXIT_FAILURE;
+    players[2].sprite.setTexture(player3);
+    int playerWidth3 = 186, playerHeight3 = 166;     // player3  ( width, height )
+    players[2].sprite.setScale(players[0].sprite.getGlobalBounds().width / 186, players[0].sprite.getGlobalBounds().height / 166);
+    players[2].sprite.setTextureRect(IntRect(3, 376, playerWidth3, playerHeight3));
+    players[2].sprite.setOrigin(players[2].sprite.getGlobalBounds().width / 2, players[2].sprite.getGlobalBounds().height / 2);
+    players[2].sprite.setPosition(windowWidth / 2, 150);
+
+
+
+    float playersScale_x[3];
+    float playersScale_y[3];
+
+    playersScale_x[0] = 0.6;
+    playersScale_y[0] = 0.6;
+
+    playersScale_x[1] = players[0].sprite.getGlobalBounds().width / 172;
+    playersScale_y[1] = players[0].sprite.getGlobalBounds().height / 158;
+
+    playersScale_x[2] = players[0].sprite.getGlobalBounds().width / 186;
+    playersScale_y[2] = players[0].sprite.getGlobalBounds().height / 166;
+
+    bool MaximizeCheck1[3] = { 0 };
+    bool MaximizeCheck2[3] = { 0 };
+
+
+    float playersWidth = players[0].sprite.getGlobalBounds().width;
+    float playersHeight = players[0].sprite.getGlobalBounds().height;
+
+
+
+
+    Vector2f mousePosition(Mouse::getPosition(window).x, Mouse::getPosition(window).y);
+
+    // Mouse Position Declaration (current , previous)
+    Vector2f mouse_Position_Previous;
+    Vector2f mouse_Position_Current;
+
+    // check if the mouse is out of window
+    bool mouseInWindowRangeCheck = 0;
+
+
+    // Direction of moving
+    int dix = 0, diy = 0;
+
+    // velocity
+    float mouseVelocity_x[3] = { 0 }, mouseVelocity_y[3] = { 0 }, playerVelocityMaximum_x = 12, playerVelocityMaximum_y = 8;
+
+    //Turn
+    double timeTurnR = 0, timeTurnL = 0;
+    bool turnRightCheck = 0, turnLeftCheck = 0;
+
+
+    // Level Time
+    int levelTime[3] = { 0 };
+
+    // User Number
+    int userNumber = 1;
+
+    // Reberth
+    bool reberthCheck[3] = { 0 };
+    bool reberthCheck_not_Eaten[3] = { 0 };
+
+    int reberthTime[3] = { 0 };
+    int reberthTime_not_Eaten[3] = { 0 };
+
+    SoundBuffer playerSpwanBuff;
+    if (!playerSpwanBuff.loadFromFile("playerSpawn.wav"))
+        return EXIT_FAILURE;
+    Sound playerSpwanSound(playerSpwanBuff);
+
+    int f1NumberEaten[3] = { 0 }, f2NumberEaten[3] = { 0 }, f3NumberEaten[3] = { 0 }, starsNumberEaten[3] = { 0 };
+
+
+    // score effect
+    Font font1;
+    if (!font1.loadFromFile("Sunny Spells Basic.ttf"))
+        return EXIT_FAILURE;
+
+    plus_10.setFont(font1);
+    plus_10.setCharacterSize(45);
+    plus_10.setFillColor(Color::White);
+    plus_10.setString("+10");
+
+    plus_20.setFont(font1);
+    plus_20.setCharacterSize(45);
+    plus_20.setFillColor(Color::White);
+    plus_20.setString("+20");
+
+    plus_30.setFont(font1);
+    plus_30.setCharacterSize(45);
+    plus_30.setFillColor(Color::White);
+    plus_30.setString("+30");
+
+
+    int scoreNumber;
+
+
+    // Effects Sprite Sheet
+    Texture Effects;
+    if (!Effects.loadFromFile("Effects.png"))
+        return EXIT_FAILURE;
+
+    // Effects Onfire
+    float OnFire1Score[3] = { 1,1,1 }, OnFire1ScorePrev[3] = { 1,1,1 };
+    bool OnFire1Check[3] = { 0 };
+    int OnFire1Timer[3] = { 0 };
+
+    Yum.setTexture(Effects);
+    Yum.setTextureRect(IntRect(745, 2, 107, 90));
+
+    Gulb.setTexture(Effects);
+    Gulb.setTextureRect(IntRect(344, 2, 169, 138));
+    Gulb.setScale(0, 0);
+
+
+
+    // Feeding Frenzy Sound
+    SoundBuffer buf;
+    if (!buf.loadFromFile("feedingFrenzy.wav"))
+        return EXIT_FAILURE;
+
+    feddingFren.setBuffer(buf);
+    feddingFren.setVolume(50);
+
+    // Feshing Frenzy Sound
+    SoundBuffer Double;
+    if (!Double.loadFromFile("doubleFrenzy.wav"))
+        return EXIT_FAILURE;
+
+    doubleFrenzy.setBuffer(Double);
+    doubleFrenzy.setVolume(50);
+    bool c1[3] = { 0 }, c2[3] = { 0 };
+
+    // On Fire Score
+    Font fontOnfire;
+    if (!fontOnfire.loadFromFile("Reach-Fill.ttf"))
+        return EXIT_FAILURE;
+
+    OnFireText.setFont(fontOnfire);
+    OnFireText.setCharacterSize(40);
+    OnFireText.setPosition(1200, 30);
+    // Stars effect
+    Texture Bonus;
+    if (!Bonus.loadFromFile("Bonus.png"))
+        return EXIT_FAILURE;
+
+    star.setTexture(Bonus);
+    star.setTextureRect(IntRect(2, 272, 38, 40));
+    star.setScale(1.5, 1.5);
+
+
+    // Small Stars
+    smalStarw.setTexture(Effects);
+    smalStarw.setTextureRect(IntRect(3, 166, 28, 30));
+    smalStary.setTexture(Effects);
+    smalStary.setTextureRect(IntRect(3, 200, 28, 30));
+    vector<int> count;   // Number of All smallStars created
+
+
+    // Sparks
+    Texture spark1Texture;
+    if (!spark1Texture.loadFromFile("spark2.png"))
+        return EXIT_FAILURE;
+    spark1.setTexture(spark1Texture);
+    //spark1.setScale(0.16, 0.16);
+
+
+
+    // Sound when Eating A Star
+    SoundBuffer buff;
+    if (!buff.loadFromFile("starPickup.wav"))
+        return EXIT_FAILURE;
+    bS.setBuffer(buff);
+
+
+
+    // Sound When Eating Fish 1
+    SoundBuffer buffer;
+    if (!buffer.loadFromFile("bite1.wav"))
+        return EXIT_FAILURE;
+    bite1Sound.setBuffer(buffer);
+
+    SoundBuffer buffer2;
+    if (!buffer2.loadFromFile("bite2.wav"))
+        return EXIT_FAILURE;
+    Sound bite2Sound(buffer2);
+
+    SoundBuffer buffer3;
+    if (!buffer3.loadFromFile("bite3.wav"))
+        return EXIT_FAILURE;
+    Sound bite3Sound(buffer3);
+
+    // Music
+    Music LevelsMusic[3];
+    if (!LevelsMusic[0].openFromFile("Music 1.ogg"))
+        return EXIT_FAILURE;
+
+    if (!LevelsMusic[1].openFromFile("Music 2.ogg"))
+        return EXIT_FAILURE;
+
+    if (!LevelsMusic[2].openFromFile("Music 3.ogg"))
+        return EXIT_FAILURE;
+
+
+    // Time
+    Clock clock, clo;
+    double dt = 0;
+
+    // check eating
+    bool EatingCheck = 0;
+
+    // Position of window
+    Vector2f windowPo(window.getPosition().x, window.getPosition().y);
+
+    // Bubbles effect when eating fish
+    Texture bub1T;
+    if (!bub1T.loadFromFile("bubble2.png"))
+        return EXIT_FAILURE;
+
+    bubble.setTexture(bub1T);
+    bubble.setScale(0, 0);
+    for (int i = 0; i < 5; i++)
+    {
+        bubbles[i] = bubble;
+    }
+
+    double eatingTime = 0;
+    double bubbsT = 0;  // Bubbles Time
+    bool EB = 0;        // Bubbles when eating check
+
+    // Bubbles In Back
+    int Ti = 0;
+    bubble2.setTexture(bub1T);
+    vector<float> bubbleScale;
+
+    // player position
+    Vector2f playerP;
+
+    // BackGround Items
+    Texture Back1T;
+    if (!Back1T.loadFromFile("back 1 t.png"))
+        return EXIT_FAILURE;
+
+    Texture Back2T;
+    if (!Back2T.loadFromFile("back 2 t.png"))
+        return EXIT_FAILURE;
+
+    Sprite items[3][10];
+    int itemsNumber[3];
+
+    // Items level 1
+
+         // Rock 1
+    items[0][0].setTexture(Back1T);
+    items[0][0].setTextureRect(IntRect(0, 0, 390, 108));
+    items[0][0].setScale(1.4, 1.4);
+    items[0][0].setPosition(550, window.getSize().y - 108 * 1.4 + 127);
+
+    // Rock 2
+    items[0][1] = items[0][0];
+    items[0][1].setScale(-1.4, 1.4);
+    items[0][1].setPosition(270, items[0][1].getPosition().y);
+
+    // Coral reefs
+       // Coral 1
+    items[0][2].setTexture(Back1T);
+    items[0][2].setTextureRect(IntRect(138, 111, 182, 115));
+    items[0][2].setPosition(800, windowHeight - 180 + 127);
+
+    // Coral 2
+    items[0][3].setTexture(Back1T);
+    items[0][3].setTextureRect(IntRect(322, 117, -180, 110));
+    items[0][3].setPosition(640, items[0][2].getPosition().y);
+
+    // Coral 3
+    items[0][4] = items[0][2];
+    items[0][4].setScale(1.3, 1.3);
+    items[0][4].setPosition(200, windowHeight + 145 - 110 * 1.3);
+
+    // Coral 4
+    items[0][5] = items[0][2];
+    items[0][5].setPosition(1100, windowHeight + 145 - 115);
+
+    // Shrub 
+    items[0][6].setTexture(Back1T);
+    items[0][6].setTextureRect(IntRect(0, 239, 137, 252));
+    items[0][6].setScale(1.2, 1.5);
+    items[0][6].setPosition(-61, 820);
+
+    itemsNumber[0] = 7;
+
+
+    // Items level 3
+
+    items[2][0].setTexture(Back2T);
+    items[2][0].setTextureRect(IntRect(0, 0, 405, 133));
+    items[2][0].setScale(1.4, 1.4);
+    items[2][0].setPosition(680, windowHeight - 133 * 1.4 + 127);
+
+    items[2][1].setTexture(Back2T);
+    items[2][1].setTextureRect(IntRect(0, 241, 146, 131));
+    items[2][1].setScale(-1.5, 1.5);
+    items[2][1].setPosition(1350, windowHeight - 144 * 1.5 + 150);
+
+    items[2][2] = items[2][1];
+    items[2][2].setScale(1.4, 1.4);
+    items[2][2].setPosition(1100, 950);
+
+    items[2][3] = items[2][2];
+    items[2][3].setScale(1.3, 1.3);
+    items[2][3].setPosition(-80, windowHeight - 146 * 1.3 + 150);
+
+    items[2][4].setTexture(Back2T);
+    items[2][4].setTextureRect(IntRect(0, 137, 266, 100));
+    items[2][4].setScale(1.5, 1.5);
+    items[2][4].setPosition(-6, windowHeight + 150 - 80);
+
+
+
+    itemsNumber[2] = 5;
+
+    // Boom
+    Texture mineTexture;
+    if (!mineTexture.loadFromFile("Boom.png"))
+        return EXIT_FAILURE;
+
+    Sprite boom(mineTexture);
+    boom.setTextureRect(IntRect(2, 2, 68, 64));
+    boom.setOrigin(boom.getGlobalBounds().width / 2, boom.getGlobalBounds().height / 2);
+    vector <Sprite> booms;
+    int spwanTimerboom = 0;
+    vector <int> boomsTimerLife;
+    vector<int> boomsStopPosition;
+    bool boomsCheck = 0;
+
+    Sprite boomEffects(mineTexture);
+    boomEffects.setTextureRect(IntRect(4, 71, 155, 135));
+    boomEffects.setOrigin(boomEffects.getGlobalBounds().width / 2, boomEffects.getGlobalBounds().height / 2);
+    boomEffects.setScale(0, 0);
+    float boom_Effects_Animation_Counter = 0;
+
+
+    SoundBuffer boomBuff;
+    if (!boomBuff.loadFromFile("mineExplode.wav"))
+        return EXIT_FAILURE;
+
+    Sound boomSound(boomBuff);
+
+    // Wining
+
+        // Wining Sound
+    SoundBuffer winBuf;
+    if (!winBuf.loadFromFile("stageClear.wav"))
+        return EXIT_FAILURE;
+    winSound.setBuffer(winBuf);
+    bool winSoundCheck = 0;
+    bool winingCheck[3] = { 0 };
+
+    // Bubbles
+    Texture BigBubble;
+    if (!BigBubble.loadFromFile("bub.png"))
+        return EXIT_FAILURE;
+    Bubs[0][0].setTexture(BigBubble);
+    Bubs[0][0].setOrigin(Bubs[0][0].getGlobalBounds().width / 2, Bubs[0][0].getGlobalBounds().height / 2);
+
+    // Perfect letters
+
+    Perfect[0][0].setCharacterSize(100);
+    Perfect[0][0].setFont(font1);
+    Perfect[0][0].setString("P");
+    Perfect[0][0].setFillColor(Color::Red);
+    Perfect[0][0].setOrigin(Perfect[0][0].getGlobalBounds().width / 2, Perfect[0][0].getGlobalBounds().height / 2);
+    Perfect[0][0].setPosition(301, 505);
+    Perfect[0][0].setScale(0, 0);
+    Bubs[0][0].setScale(0, 0);
+    Bubs[0][0].setPosition(301, 545);
+
+    for (int i = 1; i < 7; i++)
+    {
+        Bubs[0][i] = Bubs[0][0];
+        Bubs[0][i].setPosition(Bubs[0][0].getPosition().x + (113 * i), 545);
+        Perfect[0][i] = Perfect[0][0];
+        Perfect[0][i].setPosition(Perfect[0][0].getPosition().x + (113 * i), 505);
+    }
+
+    Perfect[0][1].setString("E");
+    Perfect[0][2].setString("R");
+    Perfect[0][3].setString("F");
+    Perfect[0][4].setString("E");
+    Perfect[0][5].setString("C");
+    Perfect[0][6].setString("T");
+
+    for (int i = 1; i < 3; i++)
+    {
+        for (int j = 0; j < 7; j++)
+        {
+            Perfect[i][j] = Perfect[0][j];
+            Bubs[i][j] = Bubs[0][j];
+        }
+    }
+
+
+    // Losing
+
+        // Losing Sound
+    SoundBuffer losBuf;
+    if (!losBuf.loadFromFile("gameOver.wav"))
+        return EXIT_FAILURE;
+    losSound.setBuffer(losBuf);
+    bool losSoundCheck = 0;
+    bool losingCheck[3] = { 0 };
+
+    SoundBuffer dieBuf;
+    if (!dieBuf.loadFromFile("playerDie.wav"))
+        return EXIT_FAILURE;
+    dieSound.setBuffer(dieBuf);
+
+    // Bubbles
+    Bubs1[0][0].setTexture(BigBubble);
+    Bubs1[0][0].setOrigin(Bubs1[0][0].getGlobalBounds().width / 2, Bubs1[0][0].getGlobalBounds().height / 2);
+
+    // Sorry letters
+
+    Sorry[0][0].setCharacterSize(100);
+    Sorry[0][0].setFont(font1);
+    Sorry[0][0].setString("S");
+    Sorry[0][0].setFillColor(Color::Red);
+    Sorry[0][0].setOrigin(Sorry[0][0].getGlobalBounds().width / 2, Sorry[0][0].getGlobalBounds().height / 2);
+    Sorry[0][0].setPosition(340, 505);
+    Sorry[0][0].setScale(0, 0);
+    Bubs1[0][0].setScale(0, 0);
+    Bubs1[0][0].setPosition(340, 545);
+
+    for (int i = 1; i < 5; i++)
+    {
+        Bubs1[0][i] = Bubs1[0][0];
+        Bubs1[0][i].setPosition(Bubs1[0][0].getPosition().x + (113 * i), 545);
+        Sorry[0][i] = Sorry[0][0];
+        Sorry[0][i].setPosition(Sorry[0][0].getPosition().x + (113 * i), 505);
+    }
+
+    Sorry[0][1].setString("O");
+    Sorry[0][2].setString("R");
+    Sorry[0][3].setString("R");
+    Sorry[0][4].setString("Y");
+
+    for (int i = 1; i < 3; i++)
+    {
+        for (int j = 0; j < 5; j++)
+        {
+            Sorry[i][j] = Sorry[0][j];
+            Bubs1[i][j] = Bubs1[0][j];
+        }
+    }
+
+    // Turbo
+
+    SoundBuffer dashBuff;
+    if (!dashBuff.loadFromFile("playerDash.wav"))
+        return EXIT_FAILURE;
+
+    dashSound.setBuffer(dashBuff);
+
+
+
+    // Speed Effect
+
+        // Speed Sprite
+    Texture SpeedText;
+    if (!SpeedText.loadFromFile("speed1.png"))
+        return EXIT_FAILURE;
+    Speed.setTexture(SpeedText);
+
+    // Speed Start Sound
+    SoundBuffer speedStartBuf;
+    if (!speedStartBuf.loadFromFile("speedStart.wav"))
+        return EXIT_FAILURE;
+    Sound speedStartSound;
+    speedStartSound.setBuffer(speedStartBuf);
+
+    // Speed End Sound
+    SoundBuffer speedEndBuf;
+    if (!speedEndBuf.loadFromFile("speedEnd.wav"))
+        return EXIT_FAILURE;
+    Sound speedEndSound;
+    speedEndSound.setBuffer(speedEndBuf);
+
+    // Speed Timer 
+    int speedTime = 0;
+    bool speedCheck = 0;
+
+
+
+    // Result Screen
+
+        //board
+    Texture boardText;
+    if (!boardText.loadFromFile("levels.png"))
+        return EXIT_FAILURE;
+    Sprite resultBoard(boardText);
+    resultBoard.setOrigin(resultBoard.getGlobalBounds().width / 2, resultBoard.getGlobalBounds().height / 2);
+    resultBoard.setPosition(640, 480);
+    resultBoard.setScale(0, 0);
+
+    // Title
+    Texture TitleTexture;
+    if (!TitleTexture.loadFromFile("title.png"))
+        return EXIT_FAILURE;
+    Sprite Title(TitleTexture);
+    Title.setOrigin(Title.getGlobalBounds().width / 2, Title.getGlobalBounds().height / 2);
+    Title.setPosition(670, 115);
+    Title.setScale(0, 0);
+
+    // Fishs
+    Sprite enemeisBoard[3][3];
+    Texture ememeisBoardTex[3][3];
+
+    if (!ememeisBoardTex[0][0].loadFromFile("f.png"))
+        return EXIT_FAILURE;
+    if (!ememeisBoardTex[0][1].loadFromFile("f2.png"))
+        return EXIT_FAILURE;
+    if (!ememeisBoardTex[0][2].loadFromFile("f3.png"))
+        return EXIT_FAILURE;
+
+    if (!ememeisBoardTex[2][0].loadFromFile("f7.png"))
+        return EXIT_FAILURE;
+    if (!ememeisBoardTex[2][1].loadFromFile("f8.png"))
+        return EXIT_FAILURE;
+    if (!ememeisBoardTex[2][2].loadFromFile("f9.png"))
+        return EXIT_FAILURE;
+
+    for (int i = 0; i < 3; i++)
+    {
+        for (int j = 0; j < 3; j++)
+        {
+            enemeisBoard[i][j].setTexture(ememeisBoardTex[i][j]);
+            enemeisBoard[i][j].setOrigin(enemeisBoard[i][j].getGlobalBounds().width / 2, enemeisBoard[i][j].getGlobalBounds().width / 2);
+            enemeisBoard[i][j].setScale(0, 0);
+        }
+    }
+
+    for (int i = 0; i < 3; i++)
+        enemeisBoard[i][0].setPosition(260, 400);
+    for (int i = 0; i < 3; i++)
+        enemeisBoard[i][1].setPosition(480, 400);
+    for (int i = 0; i < 3; i++)
+        enemeisBoard[i][2].setPosition(700, 390);
+
+    enemeisBoard[2][1].setPosition(480, 370);
+    enemeisBoard[2][2].setPosition(700, 420);
+
+
+
+    // Star
+    Sprite starBoard;
+    starBoard.setTexture(Bonus);
+    starBoard.setTextureRect(IntRect(2, 272, 38, 40));
+    starBoard.setOrigin(starBoard.getGlobalBounds().width / 2, starBoard.getGlobalBounds().height / 2);
+    starBoard.setScale(0, 0);
+    starBoard.setPosition(1000, 400);
+
+    // Score
+    Text ScoreBoard[3];
+    ScoreBoard[0].setFont(fontOnfire);
+    ScoreBoard[0].setCharacterSize(40);
+    ScoreBoard[0].setOrigin(ScoreBoard[0].getGlobalBounds().width / 2, ScoreBoard[0].getGlobalBounds().height / 2);
+    ScoreBoard[0].setPosition(550, 578);
+    ScoreBoard[0].setScale(0, 0);
+
+    ScoreBoard[1] = ScoreBoard[0];
+    ScoreBoard[2] = ScoreBoard[0];
+
+    //Texts
+    Text stageCompleted;
+    stageCompleted.setFont(font1);
+    stageCompleted.setString("STAGE COMPLETE!");
+    stageCompleted.setCharacterSize(100);
+    stageCompleted.setPosition(350, 200);
+    stageCompleted.setScale(0, 0);
+
+
+    Text numbersEatenText[3][3];  // 3 levels * 4 Texts (fish1, fish2, fish3)
+    for (int i = 0; i < 3; i++)
+    {
+        for (int j = 0; j < 3; j++)
+        {
+            numbersEatenText[i][j].setFont(font1);
+            numbersEatenText[i][j].setOrigin(numbersEatenText[i][j].getGlobalBounds().width / 2, numbersEatenText[i][j].getGlobalBounds().height / 2);
+            numbersEatenText[i][j].setScale(0, 0);
+        }
+    }
+    for (int i = 0; i < 3; i++)
+    {
+        numbersEatenText[i][0].setPosition(250, 430);
+        numbersEatenText[i][1].setPosition(470, 430);
+        numbersEatenText[i][2].setPosition(680, 430);
+    }
+
+    Text numberStarsEatenText[3];
+    numberStarsEatenText[0].setFont(font1);
+    numberStarsEatenText[0].setPosition(990, 435);
+    numberStarsEatenText[0].setScale(0, 0);
+
+    numberStarsEatenText[1] = numberStarsEatenText[0];
+    numberStarsEatenText[2] = numberStarsEatenText[0];
+
+
+    // Chomp
+    Sprite Chomp;
+    Chomp.setTexture(Effects);
+    Chomp.setTextureRect(IntRect(517, 2, 107, 89));
+    Chomp.setOrigin(Chomp.getGlobalBounds().width / 2, Chomp.getGlobalBounds().height / 2);
+    Chomp.setScale(0.8, 0.8);
+
+    // Time
+    int resultTime[3] = { 0 };
+
+    // Continue Button
+    Sprite ContinueUnSelctedWining;
+    ContinueUnSelctedWining.setTexture(textures[12]);
+    ContinueUnSelctedWining.setOrigin(ContinueUnSelctedWining.getGlobalBounds().width / 2, ContinueUnSelctedWining.getGlobalBounds().height / 2);
+    ContinueUnSelctedWining.setPosition(634, 842);
+    ContinueUnSelctedWining.setScale(2, 2);
+
+    Sprite ContinueSelctedWining;
+    ContinueSelctedWining.setTexture(textures[6]);
+    ContinueSelctedWining.setOrigin(ContinueSelctedWining.getGlobalBounds().width / 2, ContinueSelctedWining.getGlobalBounds().height / 2);
+    ContinueSelctedWining.setPosition(634, 842);
+    ContinueSelctedWining.setScale(2, 2);
+
+    bool ContinueSelctedCheckWining = 0;
+
+    Text conutinueTextWining;
+    conutinueTextWining.setFont(fontOnfire);
+    conutinueTextWining.setString("CONTINUE");
+    conutinueTextWining.setCharacterSize(44);
+    conutinueTextWining.setOrigin(conutinueTextWining.getGlobalBounds().width / 2, conutinueTextWining.getGlobalBounds().height / 2);
+    conutinueTextWining.setPosition(634, 835);
+    conutinueTextWining.setFillColor(Color::Black);
+
+
+    // Lose Result
+        // Game Over Text
+    Text GameOver;
+    GameOver.setFont(font1);
+    GameOver.setString("GAME OVER");
+    GameOver.setOrigin(GameOver.getGlobalBounds().width / 2, GameOver.getGlobalBounds().height / 2);
+    GameOver.setPosition(540, 300);
+    GameOver.setFillColor(Color::Red);
+    GameOver.setCharacterSize(90);
+    GameOver.setScale(0, 0);
+
+    // Continue Button
+        // Un Selected Button
+    Sprite ContinueUnSelctedLosing(textures[12]);
+    ContinueUnSelctedLosing.setOrigin(ContinueUnSelctedLosing.getGlobalBounds().width / 2, ContinueUnSelctedLosing.getGlobalBounds().height / 2);
+    ContinueUnSelctedLosing.setPosition(960, 650);
+    ContinueUnSelctedLosing.setScale(2, 2);
+
+    // Selected Button
+    Sprite ContinueSelctedLosing(textures[6]);
+    ContinueSelctedLosing.setOrigin(ContinueSelctedLosing.getGlobalBounds().width / 2, ContinueSelctedLosing.getGlobalBounds().height / 2);
+    ContinueSelctedLosing.setPosition(960, 650);
+    ContinueSelctedLosing.setScale(2, 2);
+
+    bool ContinueSelctedCheckLosing = 0;
+
+    // Text
+    Text conutinueTextLosing = conutinueTextWining;
+    conutinueTextLosing.setOrigin(conutinueTextLosing.getGlobalBounds().width / 2, conutinueTextLosing.getGlobalBounds().height / 2);
+    conutinueTextLosing.setFillColor(Color::Red);
+    conutinueTextLosing.setPosition(960, 645);
+
+
+
+    // Quite Button
+        // Selected Button
+    Sprite QuitButtonSelected(textures[6]);
+    QuitButtonSelected.setOrigin(QuitButtonSelected.getGlobalBounds().width / 2, QuitButtonSelected.getGlobalBounds().height / 2);
+    QuitButtonSelected.setPosition(325, 650);
+    QuitButtonSelected.setScale(2, 2);
+
+    // Un Selected Button
+    Sprite QuitButtonUnSelected(textures[12]);
+    QuitButtonUnSelected.setOrigin(QuitButtonUnSelected.getGlobalBounds().width / 2, QuitButtonUnSelected.getGlobalBounds().height / 2);
+    QuitButtonUnSelected.setPosition(325, 650);
+    QuitButtonUnSelected.setScale(2, 2);
+
+    bool QuitSelctedCheck = 0;
+
+    // Text
+    Text QuitText = conutinueTextLosing;
+    QuitText.setString("Quit");
+    QuitText.setOrigin(QuitText.getGlobalBounds().width / 2, QuitText.getGlobalBounds().height / 2);
+    QuitText.setPosition(325, 645);
+
+
+
+    SoundBuffer Grow;
+    Grow.loadFromFile("playerGrow.wav");
+    Sound growSound;
+    growSound.setBuffer(Grow);
+
+
+
+
+    // Abdo Declarations ==================================================================================
+    sf::RectangleShape rectangle(sf::Vector2f(1280.f, 150.f));
+    rectangle.setFillColor(sf::Color(40, 120, 100));
+    ////////
+    Color lineColor = Color::Black;
+    RectangleShape line(Vector2f(1280, 5));
+    line.setFillColor(lineColor);
+    line.setPosition(0, 150);
+    RectangleShape line_GROWTH(Vector2f(350, 15));
+    line_GROWTH.setFillColor(lineColor);
+    line_GROWTH.setPosition(200, 110);
+
+    RectangleShape line_ABILITY(Vector2f(220, 15));
+    line_ABILITY.setFillColor(lineColor);
+    line_ABILITY.setPosition(900, 110);
+
+    CircleShape triangle(10);
+    triangle.setPointCount(3);
+    triangle.setPosition(200 + (200.f * (35.f / 90)), 120);
+    triangle.setFillColor(Color::Red);
+
+
+    //ConvexShape triangle;
+    //triangle.setPointCount(3); //  number of points 
+    //triangle.setPoint(0, sf::Vector2f(200 + (200.f * (35.f / 90)), 135));
+    //triangle.setPoint(1, sf::Vector2f(280, 135));
+    //triangle.setPoint(2, sf::Vector2f(270, 120));
+    ////////
+    /*ConvexShape triangle2;
+    triangle2.setPointCount(3);
+    triangle2.setPoint(0, sf::Vector2f(400, 135));
+    triangle2.setPoint(1, sf::Vector2f(420, 135));
+    triangle2.setPoint(2, sf::Vector2f(410, 120));
+    triangle2.setFillColor(sf::Color::Red);*/
+    CircleShape triangle2(10);
+    triangle2.setPointCount(3);
+    triangle2.setPosition(350 + (200.f * (35.f / 90)), 120);
+    triangle2.setFillColor(Color::Red);
+
+
+    Texture score_tab;
+    score_tab.loadFromFile("score_tab.png");
+    Sprite tab[4];
+    tab[0].setTexture(score_tab);
+    tab[0].setColor(Color::Black);
+    tab[0].setPosition(900, 30);
+    tab[0].setScale(1.8f, 1.5f);
+    for (int i = 1; i < 4; i++)
+        tab[i] = tab[0];
+    tab[1].setPosition(900, 30);
+    tab[2].setPosition(960, 30);
+    tab[3].setPosition(960, 30);
+
+    ////////
+    Texture double_tab;
+    double_tab.loadFromFile("score_tab.png");
+    Sprite Doublect(double_tab);
+    Doublect.setColor(Color::Black);
+    Doublect.setPosition(1200, 30);
+    Doublect.setScale(0.4f, 1.5f);
+
+    Texture double_tab2;
+    double_tab2.loadFromFile("score_tab.png");
+    Sprite Doublect2(double_tab);
+    Doublect2.setColor(Color::Black);
+    Doublect2.setPosition(1200, 30);
+    Doublect2.setScale(0.4f, 1.5f);
+
+    RectangleShape triple_tab(Vector2f(25, 25));
+    triple_tab.setFillColor(lineColor);
+    triple_tab.setPosition(1200, 110);
+
+    /////////
+    //Texture bub1;
+    //bub1.loadFromFile("bub.png");
+    //Sprite Bub(bub1);
+    //Bub.setColor(Color::Blue);
+    //Bub.setScale(1.5f, 1.2f);
+    //Bub.setPosition(300, 25);
+    ////////////
+    //Texture bub2;
+    //bub2.loadFromFile("bub.png");
+    //Sprite Bub2(bub2);
+    //Bub2.setScale(1.5f, 1.3f);
+    //Bub2.setColor(Color::Blue);
+    //Bub2.setPosition(420, 20);
+    ///////
+    Sprite display_bubbles[3][2];
+    Texture bubbles_fish[3][2];
+    bubbles_fish[0][0].loadFromFile("bubble_score.png");
+    bubbles_fish[0][1].loadFromFile("bubble_score.png");
+
+    bubbles_fish[1][0].loadFromFile("bubble_score.png");
+    bubbles_fish[1][1].loadFromFile("bubble_score.png");
+
+    bubbles_fish[2][0].loadFromFile("bubble_score.png");
+    bubbles_fish[2][1].loadFromFile("bubble_score.png");
+
+    for (int i = 0; i < 3; i++)
+    {
+        for (int j = 0; j < 2; j++)
+        {
+            display_bubbles[i][j].setTexture(bubbles_fish[i][j]);
+            display_bubbles[i][j].setScale(90 / display_bubbles[i][j].getGlobalBounds().width, 81.9 / display_bubbles[i][j].getGlobalBounds().height);
+            display_bubbles[i][j].setColor(Color::Blue);
+            display_bubbles[i][j].setPosition(300 + (j * 120), 23);
+
+
+        }
+
+
+
+
+    }
+
+
+
+    Sprite display_fishs[3][3];
+    Texture fishs[3][3];
+    fishs[0][0].loadFromFile("fish1.png");
+    fishs[0][1].loadFromFile("fish2.png");
+    fishs[0][2].loadFromFile("fish3.png");
+
+    fishs[1][0].loadFromFile("fish1_level2.png");
+    fishs[1][1].loadFromFile("fish2_level2.png");
+    fishs[1][2].loadFromFile("fish3_level2.png");
+
+    fishs[2][0].loadFromFile("fish1_level3.png");
+    fishs[2][1].loadFromFile("fish2_level3.png");
+    fishs[2][2].loadFromFile("fish3_level3.png");
+    //  display_fishs[0][0].setTexture(fishs[0][0]);
+    //  cout << display_fishs[0][0].getGlobalBounds().height * 1.3f;  width 81.9 // height 61.1
+
+    for (int i = 0; i < 3; i++)
+    {
+        for (int j = 0; j < 3; j++)
+        {
+            display_fishs[i][j].setTexture(fishs[i][j]);
+            display_fishs[i][j].setScale(90 / display_fishs[i][j].getGlobalBounds().width, 81.9 / display_fishs[i][j].getGlobalBounds().height);
+
+            display_fishs[i][j].setPosition(180 + (j * 120), 20);
+
+
+        }
+
+
+
+
+    }
+
+
+    Font tab_font;
+
+    if (!tab_font.loadFromFile("PermanentMarker-Regular.ttf")) {
+        cout << "faild to load font  " << endl;
+        return 1;
+    }
+    Text menu;
+    menu.setFont(tab_font);
+    menu.setString("MENU");
+    menu.setCharacterSize(25);
+    menu.setFillColor(Color(200, 255, 255));
+    menu.setPosition(80, 40);
+
+    Text GROWTH;
+    GROWTH.setFont(tab_font);
+    GROWTH.setString("GROWTH");
+    GROWTH.setCharacterSize(25);
+    GROWTH.setFillColor(Color(200, 255, 255));
+    GROWTH.setPosition(80, 100);
+
+    Text SCORE;
+    SCORE.setFont(tab_font);
+    SCORE.setString("SCORE");
+    SCORE.setCharacterSize(25);
+    SCORE.setFillColor(Color(200, 255, 255));
+    SCORE.setPosition(800, 40);
+    Text SCORE_0;
+    SCORE_0.setFont(tab_font);
+    SCORE.setCharacterSize(30);
+    SCORE_0.setString("0");
+    SCORE_0.setPosition(1080, 40);
+
+
+    Text ABILTY;
+    ABILTY.setFont(tab_font);
+    ABILTY.setString("ABILTY");
+    ABILTY.setCharacterSize(25);
+    ABILTY.setFillColor(Color(200, 255, 255));
+    ABILTY.setPosition(800, 100);
+    //////////////////////
+    RectangleShape hb;
+    hb.setFillColor(Color::Yellow);
+    hb.setPosition(200, 110);
+
+    Texture t;
+    t.loadFromFile("Oyster.png");
+    Sprite oyster;
+    oyster.setTexture(t);
+    oyster.setTextureRect(IntRect(0, 0, 98, 100));
+    oyster.setOrigin(oyster.getGlobalBounds().width / 2, oyster.getGlobalBounds().height / 2);
+    oyster.setScale(1.7, 1.6);
+    oyster.setPosition(180, 1020);
+    float oyster_animation = 0;
+    float rate_of_change_oyster_animation = 0.3;
+
+    bool oysterCheckOpen = 0;
+    int oysterStopTimer = 300;
+
+    Texture crystal1;
+    crystal1.loadFromFile("Oyster_crystal_white.png");
+    Sprite crystal_white;
+    crystal_white.setTexture(crystal1);
+    crystal_white.setOrigin(crystal_white.getGlobalBounds().width / 2, crystal_white.getGlobalBounds().height / 2);
+    crystal_white.setPosition(oyster.getPosition().x, oyster.getPosition().y + 10);
+
+    vector <Sprite> crystals1;
+    int spwanCrystal1Timer = 1500;
+
+
+    // ===========================================================================================
+
+    // Shehab And Abd Elrahman Code
+
+    Vector2f push_position[2] = { (Vector2f(0,rand() % window.getSize().y)),(Vector2f(window.getSize().x,rand() % window.getSize().y)) };
+    // INTALIZING SMALL FISH lvl1
+    enemy[0][0].texture_enemy.loadFromFile("smallfish.png");
+    enemy[0][0].sprite_enemy.setTexture(enemy[0][0].texture_enemy);
+    enemy[0][0].width = enemy[0][0].texture_enemy.getSize().x / 15;
+    enemy[0][0].height = enemy[0][0].texture_enemy.getSize().y / 2;
+    //cout << "small width: " << enemy[0][0].sprite_enemy.getGlobalBounds().width / 15 << " small height: " << enemy[0][0].sprite_enemy.getGlobalBounds().height / 2 << endl;
+    enemy[0][0].sprite_enemy.setTextureRect(IntRect(enemy[0][0].width, 1, -1 * (enemy[0][0].width - 1), enemy[0][0].height - 1));
+    enemy[0][0].movement_time = 150;
+    enemy[0][0].push_back_timer = 35;
+    for (int i = 0; i < max_fishes; i++) {
+        enemy[0][0].turn1[i] = 7;
+        enemy[0][0].turn2[i] = 7;
+        enemy[0][0].swimming_counter[i] = 0;
+    }
+    enemy[0][0].enemies.push_back(enemy[0][0].sprite_enemy);
+    enemy[0][0].sprite_enemy.setPosition(push_position[rand() % 2]);
+
+
+    // INTALIZING SMALL FISH BLUE FISH LVL2
+    enemy[1][0].texture_enemy.loadFromFile("Angelfish_Bluee.png");
+    enemy[1][0].sprite_enemy.setTexture(enemy[1][0].texture_enemy);
+    enemy[1][0].width = enemy[1][0].texture_enemy.getSize().x / 15;
+    enemy[1][0].height = enemy[1][0].texture_enemy.getSize().y / 4;
+    enemy[1][0].sprite_enemy.setScale(0.525f, 0.525f);
+    //cout << "small width: " << enemy[1][0].sprite_enemy.getGlobalBounds().width / 15 << " small height: " << enemy[1][0].sprite_enemy.getGlobalBounds().height / 2 << endl;
+    enemy[1][0].sprite_enemy.setTextureRect(IntRect(enemy[1][0].width, 1 + (enemy[1][0].height * 2), -1 * (enemy[1][0].width - 1), enemy[1][0].height - 1));
+    enemy[1][0].movement_time = 150;
+    enemy[1][0].push_back_timer = 35;
+    for (int i = 0; i < max_fishes; i++) {
+        enemy[1][0].turn1[i] = 7;
+        enemy[1][0].turn2[i] = 7;
+        enemy[1][0].swimming_counter[i] = 0;
+    }
+    enemy[1][0].enemies.push_back(enemy[1][0].sprite_enemy);
+    enemy[1][0].sprite_enemy.setPosition(push_position[rand() % 2]);
+
+    //INTALIZING SMALL FISH TUNA LVL2
+    enemy[2][0].texture_enemy.loadFromFile("tuna_small.png");
+    enemy[2][0].sprite_enemy.setTexture(enemy[2][0].texture_enemy);
+    enemy[2][0].sprite_enemy.setScale(0.27f, 0.27f);
+    enemy[2][0].width = enemy[2][0].texture_enemy.getSize().x / 15;
+    enemy[2][0].height = enemy[2][0].texture_enemy.getSize().y / 3;
+    enemy[2][0].sprite_enemy.setTextureRect(IntRect(enemy[2][0].width + enemy[2][0].width + 1, enemy[2][0].height + 1, -1 * (enemy[2][0].width - 1), enemy[2][0].height - 1));
+    enemy[2][0].movement_time = 150;
+    enemy[2][0].push_back_timer = 0;
+    for (int i = 0; i < max_fishes; i++) {
+        enemy[2][0].turn1[i] = 6;
+        enemy[2][0].turn2[i] = 6;
+        enemy[2][0].swimming_counter[i] = 0;
+        enemy[2][0].not_eating[i] = true;
+    }
+    enemy[2][0].enemies.push_back(enemy[2][0].sprite_enemy);
+    enemy[2][0].sprite_enemy.setPosition(push_position[rand() % 2]);
+
+    // INTALIZING MEDUIM FISH LVL1
+    enemy[0][1].texture_enemy.loadFromFile("meduimfish3.png");
+    enemy[0][1].sprite_enemy.setTexture(enemy[0][1].texture_enemy);
+    enemy[0][1].sprite_enemy.setScale(0.7f, 0.7f);
+    enemy[0][1].width = enemy[0][1].texture_enemy.getSize().x / 14;
+    enemy[0][1].height = enemy[0][1].texture_enemy.getSize().y / 3;
+    //cout << "meduim width: " << enemy[0][1].sprite_enemy.getGlobalBounds().width /14<< " meduim height: " << enemy[0][1].sprite_enemy.getGlobalBounds().height/3<<endl;
+    enemy[0][1].sprite_enemy.setTextureRect(IntRect(enemy[0][1].width + enemy[0][1].width + 1, enemy[0][1].height + 1, -1 * (enemy[0][1].width - 1), enemy[0][1].height - 1));
+    enemy[0][1].movement_time = 150;
+    enemy[0][1].push_back_timer = 0;
+    for (int i = 0; i < max_fishes; i++) {
+        enemy[0][1].turn1[i] = 6;
+        enemy[0][1].turn2[i] = 6;
+        enemy[0][1].swimming_counter[i] = 0;
+        enemy[0][1].not_eating[i] = true;
+    }
+    enemy[0][1].sprite_enemy.setPosition(push_position[rand() % 2]);
+
+    // INTALIZING MEDUIM FISH lvl2
+    enemy[1][1].texture_enemy.loadFromFile("meduim_red.png");
+    enemy[1][1].sprite_enemy.setTexture(enemy[1][1].texture_enemy);
+    enemy[1][1].sprite_enemy.setScale(0.7f, 0.7f);
+    enemy[1][1].width = enemy[1][1].texture_enemy.getSize().x / 14;
+    enemy[1][1].height = enemy[1][1].texture_enemy.getSize().y / 3;
+    //cout << "meduim width: " << enemy[1][1].sprite_enemy.getGlobalBounds().width / 14 << " meduim height: " << enemy[1][1].sprite_enemy.getGlobalBounds().height / 3 << endl;
+    enemy[1][1].sprite_enemy.setTextureRect(IntRect(enemy[1][1].width + enemy[1][1].width + 1, enemy[1][1].height + 1, -1 * (enemy[1][1].width - 1), enemy[1][1].height - 1));
+    enemy[1][1].movement_time = 150;
+    enemy[1][1].push_back_timer = 0;
+    for (int i = 0; i < max_fishes; i++) {
+        enemy[1][1].turn1[i] = 6;
+        enemy[1][1].turn2[i] = 6;
+        enemy[1][1].swimming_counter[i] = 0;
+        enemy[1][1].not_eating[i] = true;
+    }
+    enemy[1][1].sprite_enemy.setPosition(push_position[rand() % 2]);
+
+    //INTALIZING MEDUIM FISH LVL3
+    enemy[2][1].texture_enemy.loadFromFile("JohnDory_meduim.png");
+    enemy[2][1].sprite_enemy.setTexture(enemy[2][1].texture_enemy);
+    enemy[2][1].width = enemy[2][1].texture_enemy.getSize().x / 15;
+    enemy[2][1].height = enemy[2][1].texture_enemy.getSize().y / 3;
+    enemy[2][1].sprite_enemy.setScale(0.7f, 0.7f);
+    enemy[2][1].sprite_enemy.setTextureRect(IntRect(enemy[2][1].width + enemy[2][1].width - 8, enemy[2][1].height + 2, -1 * (enemy[2][1].width - 2), enemy[2][1].height - 8));
+    enemy[2][1].movement_time = 150;
+    enemy[2][1].push_back_timer = 0;
+    for (int i = 0; i < max_fishes; i++) {
+        enemy[2][1].turn1[i] = 6;
+        enemy[2][1].turn2[i] = 6;
+        enemy[2][1].swimming_counter[i] = 0;
+        enemy[2][1].not_eating[i] = true;
+    }
+    enemy[2][1].enemies.push_back(enemy[2][1].sprite_enemy);
+    enemy[2][1].sprite_enemy.setPosition(push_position[rand() % 2]);
+
+    // INTALIZING BIG FISH LVL1
+    enemy[0][2].texture_enemy.loadFromFile("bigfish.png");
+    enemy[0][2].sprite_enemy.setScale(0.95, 0.95);
+    enemy[0][2].sprite_enemy.setTexture(enemy[0][2].texture_enemy);
+    enemy[0][2].width = enemy[0][2].texture_enemy.getSize().x / 14;
+    enemy[0][2].height = enemy[0][2].texture_enemy.getSize().y / 4;
+    cout << "big width: " << enemy[0][2].sprite_enemy.getGlobalBounds().width / 14 << " big height: " << enemy[0][2].sprite_enemy.getGlobalBounds().height / 4 << endl;
+    enemy[0][2].sprite_enemy.setTextureRect(IntRect(enemy[0][2].width + enemy[0][2].width, 2 * enemy[0][2].height + 2, -1 * (enemy[0][2].width - 2), enemy[0][2].height - 2));
+    enemy[0][2].movement_time = 150;
+    enemy[0][2].push_back_timer = 0;
+    for (int i = 0; i < max_fishes; i++) {
+        enemy[0][2].turn1[i] = 6;
+        enemy[0][2].turn2[i] = 6;
+        enemy[0][2].swimming_counter[i] = 0;
+        enemy[0][2].not_eating[i] = true;
+    }
+    // INTALIZING BIG FISH LVL2
+    enemy[1][2].texture_enemy.loadFromFile("parrotfish2.png");
+    enemy[1][2].sprite_enemy.setTexture(enemy[1][2].texture_enemy);
+    enemy[1][2].sprite_enemy.setScale(0.9f, 0.9f);
+    enemy[1][2].width = enemy[1][2].texture_enemy.getSize().x / 14;
+    enemy[1][2].height = enemy[1][2].texture_enemy.getSize().y / 3;
+    //cout << "big width: " << enemy[1][2].sprite_enemy.getGlobalBounds().width / 14 << " big height: " << enemy[1][2].sprite_enemy.getGlobalBounds().height / 3 << endl;
+    enemy[1][2].sprite_enemy.setTextureRect(IntRect(enemy[1][2].width + enemy[1][2].width + 1, enemy[1][2].height + 1, -1 * (enemy[1][2].width - 1), enemy[1][2].height - 1));
+    enemy[1][2].movement_time = 150;
+    enemy[1][2].push_back_timer = 0;
+    for (int i = 0; i < max_fishes; i++) {
+        enemy[1][2].turn1[i] = 6;
+        enemy[1][2].turn2[i] = 6;
+        enemy[1][2].swimming_counter[i] = 0;
+        enemy[1][2].not_eating[i] = true;
+    }
+    enemy[1][2].sprite_enemy.setPosition(push_position[rand() % 2]);
+
+    // INTALIZING BIG FISH lvl 3
+    enemy[2][2].texture_enemy.loadFromFile("Barracuda_big.png");
+    enemy[2][2].sprite_enemy.setTexture(enemy[2][2].texture_enemy);
+    enemy[2][2].width = enemy[2][2].texture_enemy.getSize().x / 14;
+    enemy[2][2].height = enemy[2][2].texture_enemy.getSize().y / 3;
+    enemy[2][2].sprite_enemy.setScale(0.790f, 0.790f);
+    enemy[2][2].sprite_enemy.setTextureRect(IntRect(enemy[2][2].width + enemy[2][2].width, enemy[2][2].height + 2, -1 * (enemy[2][2].width - 2), enemy[2][2].height - 2));
+    enemy[2][2].movement_time = 150;
+    enemy[2][2].push_back_timer = 0;
+    for (int i = 0; i < max_fishes; i++) {
+        enemy[2][2].turn1[i] = 6;
+        enemy[2][2].turn2[i] = 6;
+        enemy[2][2].swimming_counter[i] = 0;
+        enemy[2][2].not_eating[i] = true;
+    }
+    //enemy[2][2].enemies.push_back(enemy[2][2].sprite_enemy);
+    enemy[2][2].sprite_enemy.setPosition(push_position[rand() % 2]);
+
+    while (window.isOpen()) {
+
+        Event event;
+        // Game loop
+
+        while (window.pollEvent(event))
+        {
+            if (event.type == Event::Closed)
+                window.close();
+
+            mouse.setPosition(Mouse::getPosition(window).x, Mouse::getPosition(window).y);
+
+            // Start Menu event handling
+
+            if (gameState == 0)
+            {
+                b1l = 0;
+                b2l = 0;
+                b3l = 0;
+                b4l = 0;
+                b20l = 0;
+
+                if (mouse.getGlobalBounds().intersects(sprites[2].getGlobalBounds()))
+                    b1l = 1;
+
+                if (b1l == 1 && Mouse::isButtonPressed(Mouse::Left))//enter player name
+                    gameState = 3;
+                if (mouse.getGlobalBounds().intersects(sprites[3].getGlobalBounds()))
+                    b2l = 1;
+
+                if (b2l == 1 && Mouse::isButtonPressed(Mouse::Left))
+                    window.close();
+                if (mouse.getGlobalBounds().intersects(sprites[4].getGlobalBounds()))
+                    b3l = 1;
+
+                if (b3l == 1 && Mouse::isButtonPressed(Mouse::Left))//game optins
+                    gameState = 1;
+                if (mouse.getGlobalBounds().intersects(sprites[5].getGlobalBounds()))
+                    b4l = 1;
+
+                if (b4l == 1 && Mouse::isButtonPressed(Mouse::Left))//level two
+                    gameState = 6;
+
+                if (mouse.getGlobalBounds().intersects(sprites[11].getGlobalBounds()))
+                    b20l = 1;
+
+                if (b20l == 1 && Mouse::isButtonPressed(Mouse::Left))//level two
+                    gameState = 2;
+            }
+            //Take player name
+            if (gameState == 3) {
+                Pname(window, name);
+            }
+            if (gameState == 2) {
+                if (Keyboard::isKeyPressed(Keyboard::Escape)) {
+                    gameState = 0;
+                }
+
+            }
+            //show levels
+            if (gameState == 4)
+            {
+                b5l = 0;
+                b6l = 0;
+                b12l = 0;
+
+                if (mouse.getGlobalBounds().intersects(sprites[12].getGlobalBounds()))
+                    b5l = 1;
+                if (b5l == 1 && Mouse::isButtonPressed(Mouse::Left))//level one
+                    gameState = 5;
+
+                if (mouse.getGlobalBounds().intersects(sprites[22].getGlobalBounds()))
+                    b12l = 1;
+                if (b12l == 1 && Mouse::isButtonPressed(Mouse::Left))//level two
+                    gameState = 6;
+
+                if (mouse.getGlobalBounds().intersects(sprites[13].getGlobalBounds()))
+                    b6l = 1;
+                if (b6l == 1 && Mouse::isButtonPressed(Mouse::Left))//level 3
+                    gameState = 7;
+
+                if (event.type == Event::KeyPressed)
+                {
+                    if (event.key.code == Keyboard::Escape)
+                    {
+                        gameState = 0;
+                    }
+                }
+
+            }
+            //level one
+            if (gameState == 5 || gameState == 6 || gameState == 7)
+            { // Game event handling
+                if (event.type == Event::KeyPressed)
+                {
+                    if (event.key.code == Keyboard::P || event.key.code == Keyboard::Escape)
+                    {
+
+                        gameState = 8; // Pause the game
+                    }
+                }
+            }
+
+            //Game Options
+            if (gameState == 1)
+            {
+                b11l = 0;
+                setSelected(muteButton, false);
+
+                if (mouse.getGlobalBounds().intersects(muteButton.getGlobalBounds())) {
+                    b11l = 1;
+                    setSelected(muteButton, true);
+                }
+                if (b11l == 1 && Mouse::isButtonPressed(Mouse::Left)) {
+                    // Toggle between mute and unmute when the mute button is pressed
+                    isMuted = !isMuted;
+                    // Set the text color of the mute button based on the mute state
+                    setSelected(muteButton, isMuted);
+
+                    if (isMuted)
+                    {
+                        Menumusic.pause();
+                    }
+                    else
+                    {
+                        Menumusic.play();
+                    }
+                }
+                else if (exitButton.getFillColor() == Color::Yellow)
+                {
+                    window.close();
+                }
+                else if (event.key.code == Keyboard::Escape)
+                {
+                    gameState = 0;//menu
+                }
+
+            }
+
+            // Pause Menu 
+            if (gameState == 8)
+            {
+                b7l = 0;
+                b8l = 0;
+                b9l = 0;
+                b10l = 0;
+                setSelected(continueButton, false);
+                setSelected(exitButton, false);
+                setSelected(mainmenuButton, false);
+                setSelected(levelButton, false);
+
+                if (mouse.getGlobalBounds().intersects(continueButton.getGlobalBounds())) {
+                    b7l = 1;
+                    setSelected(continueButton, true);
+                }
+                if (b7l == 1 && Mouse::isButtonPressed(Mouse::Left))
+                    gameState = tempState;  //return to the game
+
+                if (mouse.getGlobalBounds().intersects(mainmenuButton.getGlobalBounds())) {
+                    b8l = 1;
+                    setSelected(mainmenuButton, true);
+                }
+                if (b8l == 1 && Mouse::isButtonPressed(Mouse::Left))
+                    gameState = 0;//menu
+
+                if (mouse.getGlobalBounds().intersects(levelButton.getGlobalBounds())) {
+                    b9l = 1;
+                    setSelected(levelButton, true);
+                }
+                if (b9l == 1 && Mouse::isButtonPressed(Mouse::Left))
+                    gameState = 4;//show levels
+
+                if (mouse.getGlobalBounds().intersects(exitButton.getGlobalBounds())) {
+                    b10l = 1;
+                    setSelected(exitButton, true);
+                }
+                if (b10l == 1 && Mouse::isButtonPressed(Mouse::Left)) {
+                    // Quit the game
+                    window.close();
+                }
+
+            }
+            window.setMouseCursorVisible(true);
+        }
+
+        // Music Handling
+
+           // Main Music
+        if (gameState == 0 || gameState == 1 || gameState == 2 || gameState == 3 || gameState == 4)
+        {
+            // Stop any level music
+            for (int i = 0; i < 3; i++)
+                if (LevelsMusic[i].getStatus() == 2)
+                    LevelsMusic[i].pause();
+            // Run Menu Music
+            if (Menumusic.getStatus() != 2)
+                Menumusic.play();
+
+            // Check Music if it is muted from options or not
+            if (isMuted == 1)
+            {
+                Menumusic.pause();
+                for (int i = 0; i < 3; i++)
+                    if (LevelsMusic[i].getStatus() == 2)
+                        LevelsMusic[i].pause();
+            }
+            else
+            {
+                if (Menumusic.getStatus() != 2)
+                    Menumusic.play();
+            }
+        }
+        else
+        {
+            if (Menumusic.getStatus() == 2)
+                Menumusic.pause();
+        }
+
+
+        // play the level music
+
+        if ((gameState == 5 || gameState == 6 || gameState == 7) && isMuted == 0)
+            if (LevelsMusic[gameState - 5].getStatus() != 2)
+                LevelsMusic[gameState - 5].play();
+
+
+        // Game logic
+        if (gameState == 5 || gameState == 6 || gameState == 7)
+        {
+            if (oysterStopTimer > 0)
+                oysterStopTimer--;
+            if (oysterStopTimer == 0)
+            {
+
+                if (oysterCheckOpen == 1)
+                {
+                    if (oyster_animation - rate_of_change_oyster_animation >= 0)
+                        oyster_animation -= rate_of_change_oyster_animation;
+                }
+                else
+                    oyster_animation += rate_of_change_oyster_animation;
+            }
+
+            if (oyster_animation >= 4 && oysterCheckOpen == 0)  // open the oyster
+            {
+                oysterCheckOpen = 1;
+                oysterStopTimer = 300;
+            }
+            else if (oyster_animation < rate_of_change_oyster_animation && oysterCheckOpen == 1) // close the oyster
+            {
+                oysterCheckOpen = 0;
+                oysterStopTimer = 300;
+                // kill the fish
+                    //player
+                if (players[gameState - 5].sprite.getGlobalBounds().intersects(oyster.getGlobalBounds()))
+                {
+                    players[gameState - 5].dieCheck = 1;
+                    players[gameState - 5].health--;
+                }
+                //enemies
+                for (int i = 0; i < 3; i++)
+                    for (int j = 0; j < 3; j++)
+                        for (int k = 0; k < enemy[i][j].enemies.size(); k++)
+                            if (enemy[i][j].enemies[k].getGlobalBounds().intersects(oyster.getGlobalBounds()))
+                                enemy[i][j].enemies.erase(enemy[i][j].enemies.begin() + k);
+            }
+
+            oyster.setTextureRect(IntRect(floor(oyster_animation) * 101, 0, 98, 100));
+
+            if (spwanCrystal1Timer == 1500)
+            {
+                crystals1.clear();
+                crystals1.push_back(crystal_white);
+                spwanCrystal1Timer = 0;
+            }
+            spwanCrystal1Timer++;
+
+            if (crystals1.size() == 1)
+            {
+                if (players[gameState - 5].sprite.getGlobalBounds().intersects(crystals1[0].getGlobalBounds()))
+                {
+                    crystals1.clear();
+                    players[gameState - 5].score += 50;
+                    EatingCheck = 1;
+                    if (OnFire1Score[gameState - 5] + 0.2 < 4)
+                        OnFire1Score[gameState - 5] += 0.2;
+                    if (EB == 1)
+                        bubbsT = 0;
+
+                    EB = 1;
+
+                    bite1Sound.play();
+                    scoreNumber = 50;
+                    ScoreEffectCreate(view[gameState - 5], dix, players[gameState - 5].sprite, OnFire1Score[gameState - 5], scoreNumber);
+                    f1NumberEaten[gameState - 5]++;
+                    players[gameState - 5].score += scoreNumber * (int)OnFire1Score[gameState - 5];
+                    hb_score[gameState - 5] += scoreNumber;
+                }
+            }
+
+            if (crystals1.size() == 1)
+            {
+                if (oysterCheckOpen == 0)
+                    crystals1[0].setScale(0, 0);
+                else
+                    crystals1[0].setScale(1, 1);
+            }
+
+
+
+
+            levelTime[gameState - 5]++;
+            tempState = gameState;
+
+            // Reberth
+            if (levelTime[gameState - 5] == 1)
+            {
+                reberthCheck[gameState - 5] = 1;
+                reberthCheck_not_Eaten[gameState - 5] = 1;
+            }
+
+            if (reberthCheck_not_Eaten[gameState - 5] == 1)
+            {
+                if (reberthTime_not_Eaten[gameState - 5] == 1)
+                {
+                    players[gameState - 5].sprite.setScale(playersScale_x[gameState - 5], playersScale_y[gameState - 5]);
+                    playerSpwanSound.play();
+                    players[gameState - 5].sprite.setPosition(windowWidth / 2, 150);
+                    mouseVelocity_x[gameState - 5] = 0;
+                    turboVelocity.x = 0;
+                    mouseVelocity_y[gameState - 5] = 0;
+                    turboVelocity.y = 0;
+
+                }
+                reberthTime_not_Eaten[gameState - 5]++;
+                if (reberthTime_not_Eaten[gameState - 5] < 45)
+                {
+                    reberthTime[gameState - 5]++;
+                    players[gameState - 5].sprite.move(0, 6);
+                }
+                if (reberthTime_not_Eaten[gameState - 5] >= 45)
+                {
+                    reberthCheck[gameState - 5] = 0;
+                    reberthTime[gameState - 5] = 0;
+                }
+                if (reberthTime_not_Eaten[gameState - 5] >= 120)
+                {
+                    reberthCheck_not_Eaten[gameState - 5] = 0;
+                    reberthTime_not_Eaten[gameState - 5] = 0;
+                }
+
+            }
+
+            if (winingCheck[gameState - 5] == 0 && losingCheck[gameState - 5] == 0)  // Still in game condition
+            {
+                // Make mouse unvisible
+                window.setMouseCursorVisible(false);
+
+
+                movingAnimationTime += 0.12;
+                if (gameState == 5 || gameState == 7)
+                {
+                    if (movingAnimationTime > 15)
+                        movingAnimationTime = 0;
+                }
+                else if (gameState == 6)
+                {
+                    if (movingAnimationTime > 14)
+                        movingAnimationTime = 0;
+                }
+
+
+
+                Vector2f mousePosition(Mouse::getPosition(window).x, Mouse::getPosition(window).y);
+
+                mouse_Position_Current.x = mousePosition.x;
+                mouse_Position_Current.y = mousePosition.y;
+
+
+                direction(mouse_Position_Current.x, mouse_Position_Previous.x, mouse_Position_Current.y, mouse_Position_Previous.y, mouseInWindowRangeCheck, dix, diy, turnRightCheck, turnLeftCheck);
+
+
+                // Moving
+                // X
+
+                if (reberthCheck[gameState - 5] == 0 && players[gameState - 5].dieCheck == 0)
+                    velocity_x(dix, mouseInWindowRangeCheck, mouse_Position_Current.x, mouse_Position_Previous.x, playerVelocityMaximum_x, mouseVelocity_x[gameState - 5]);
+
+                // Movement animation
+                if (gameState == 5)           // player 1 animation
+                {
+                    if (dix == 1 && mouseInWindowRangeCheck == 1 || reberthCheck[gameState - 5] == 1)
+                        players[0].sprite.setTextureRect(IntRect(125 + (int)movingAnimationTime * 126, 214, -playerSheetWidth1, playerSheetHeight1));
+                    else if (dix == -1 && mouseInWindowRangeCheck == 1)
+                        players[0].sprite.setTextureRect(IntRect(3 + (int)movingAnimationTime * 126, 214, playerSheetWidth1, playerSheetHeight1));
+                }
+                else if (gameState == 6)     // player 3 animation
+                {
+                    if (dix == 1 && mouseInWindowRangeCheck == 1)
+                        players[1].sprite.setTextureRect(IntRect((int)movingAnimationTime * 181 + 176, 325, -174, 152));
+                    else if (dix == -1 && mouseInWindowRangeCheck == 1)
+                        players[1].sprite.setTextureRect(IntRect((int)movingAnimationTime * 181 + 3, 325, 174, 152));
+                }
+                else if (gameState == 7)     // player 3 animation
+                {
+                    if (dix == 1 && mouseInWindowRangeCheck == 1)
+                        players[2].sprite.setTextureRect(IntRect(188 + (int)movingAnimationTime * (3016 / 15), 376, -playerWidth3, playerHeight3));
+                    else if (dix == -1 && mouseInWindowRangeCheck == 1)
+                        players[2].sprite.setTextureRect(IntRect(3 + (int)movingAnimationTime * (3016 / 15), 376, playerWidth3, playerHeight3));
+                }
+
+
+                // Y
+                if (reberthCheck[gameState - 5] == 0 && players[gameState - 5].dieCheck == 0)
+                    velocity_y(diy, mouseInWindowRangeCheck, mouse_Position_Current.y, mouse_Position_Previous.y, playerVelocityMaximum_y, mouseVelocity_y[gameState - 5]);
+
+                // Limit Velocity
+                limitV(mouseVelocity_x[gameState - 5], mouseVelocity_y[gameState - 5], playerVelocityMaximum_x);
+
+
+                // Perform a Turn
+                if (turnRightCheck == 1)
+                {
+                    if (timeTurnR > 4)
+                    {
+                        timeTurnR = 0;
+                        turnRightCheck = 0;
+                    }
+                    else
+                    {
+                        timeTurnR += 0.3;
+                        if (gameState == 5)
+                            players[0].sprite.setTextureRect(IntRect(3 + (int)timeTurnR * 126, 320, playerSheetWidth1, playerSheetHeight1));
+                        else if (gameState == 7)
+                            players[2].sprite.setTextureRect(IntRect(3 + (int)timeTurnR * 201, 546, playerWidth3, playerHeight3));
+                        else if (gameState == 6)
+                            players[1].sprite.setTextureRect(IntRect((int)timeTurnR * 181, 485, 174, 157));
+                    }
+
+                }
+
+                if (turnLeftCheck == 1)
+                {
+                    if (timeTurnL > 4)
+                    {
+                        timeTurnL = 0;
+                        turnLeftCheck = 0;
+                    }
+                    else
+                    {
+                        timeTurnL += 0.3;
+                        if (gameState == 5)
+                            players[0].sprite.setTextureRect(IntRect(124 + (int)timeTurnL * 126, 320, -playerSheetWidth1, playerSheetHeight1));
+                        else if (gameState == 7)
+                            players[2].sprite.setTextureRect(IntRect(188 + (int)timeTurnL * 201, 546, -playerWidth3, playerHeight3));
+                        else if (gameState == 6)
+                            players[1].sprite.setTextureRect(IntRect((int)timeTurnL * 181 + 174, 485, -174, 157));
+                    }
+                }
+
+
+                // Turbo
+                if (levelTime[gameState - 5] > 60)
+                    Turbo(mouseVelocity_x[gameState - 5], mouseVelocity_y[gameState - 5]);
+
+
+                // Maximize Player
+                    // First
+
+                if (hb_score[gameState - 5] >= 200)  // maximize when eating 5 fish
+                {
+                    if (MaximizeCheck1[gameState - 5] == 0) // if player width eqaul to the origingal width
+                    {
+                        MaximizeCheck1[gameState - 5] = 1;
+                        growSound.play();
+
+                        cout << "Score : " << hb_score[gameState - 5] << endl;
+                        cout << "Size : " << hb.getSize().x << endl << endl;
+                    }
+                }
+                if (MaximizeCheck1[gameState - 5] == 1 && players[gameState - 5].sprite.getGlobalBounds().width <= playersWidth * 1.5 && players[gameState - 5].sprite.getScale().x != 0)
+                {
+                    playersScale_x[gameState - 5] += 0.002;
+                    playersScale_y[gameState - 5] += 0.002;
+                    players[gameState - 5].sprite.setScale(playersScale_x[gameState - 5], playersScale_y[gameState - 5]);
+                }
+
+
+                // Second
+                if (hb_score[gameState - 5] >= 500)
+                {
+                    if (MaximizeCheck2[gameState - 5] == 0)
+                    {
+                        MaximizeCheck2[gameState - 5] = 1;
+                        growSound.play();
+                    }
+                }
+
+                if (MaximizeCheck2[gameState - 5] == 1 && players[gameState - 5].sprite.getGlobalBounds().width <= playersWidth * 2 && players[gameState - 5].sprite.getScale().x != 0)
+                {
+                    playersScale_x[gameState - 5] += 0.002;
+                    playersScale_y[gameState - 5] += 0.002;
+                    players[gameState - 5].sprite.setScale(playersScale_x[gameState - 5], playersScale_y[gameState - 5]);
+                }
+
+                // Collision with window
+                CollisionWithWindow(players[gameState - 5].sprite, window, view[gameState - 5]);
+
+
+                // Collision with fish
+                if (EatingCheck == 1)
+                {
+                    // eating animation
+                    if (eatingTime <= 6)
+                    {
+                        if (dix == -1)
+                        {
+                            if (gameState == 5)
+                                players[gameState - 5].sprite.setTextureRect(IntRect(2 + (int)eatingTime * 126, 2, 122, 104));
+                            else if (gameState == 7)
+                                players[gameState - 5].sprite.setTextureRect(IntRect(10 + (int)eatingTime * 200, 2, playerWidth3, 179));
+                            else if (gameState == 6)
+                                players[1].sprite.setTextureRect(IntRect((int)eatingTime * 181, 4, 174, 157));
+                        }
+                        else if (dix == 1)
+                        {
+                            if (gameState == 5)
+                                players[gameState - 5].sprite.setTextureRect(IntRect(125 + (int)eatingTime * 126, 2, -122, 104));
+                            else if (gameState == 7)
+                                players[gameState - 5].sprite.setTextureRect(IntRect(188 + (int)eatingTime * (3016 / 15), 1, -playerWidth3, 180));
+                            else if (gameState == 6)
+                                players[1].sprite.setTextureRect(IntRect((int)eatingTime * 181 + 174, 4, -174, 157));
+                        }
+                        eatingTime += 0.3;
+                    }
+                    else
+                    {
+                        EatingCheck = 0;
+                        eatingTime = 0;
+                    }
+                }
+
+                makeBubblesWhenEating(players[gameState - 5].sprite, playerP, EB, bubbsT, dix);
+
+                // Bubbles In Back----------------------------------------------------
+                Ti++;
+                if (Ti == 60)
+                {
+                    Ti = 0;
+                    bubble2.setPosition(rand() % windowWidth, rand() % windowHeight);
+                    BubblesInBack.push_back(bubble2);
+                    bubbleScale.push_back(0.6);
+                }
+
+                for (int i = 0; i < BubblesInBack.size(); i++)
+                {
+                    BubblesInBack[i].move(-1, 0);
+                    BubblesInBack[i].setScale(bubbleScale[i], bubbleScale[i]);
+                    bubbleScale[i] -= 0.003;
+                    if (bubbleScale[i] < 0.3)
+                        bubbleScale[i] = 0;
+                }
+
+                // Stars---------------------------------------------------------------
+
+                    // Create Stars
+                CreateStars(count);
+
+                // Create small Stars to Each Big Star
+                CreateSmallStars(count);
+
+                // Create Sparks to Each Big Star
+                CreateSparks();
+
+                // Move Stars
+                // move Small Stars
+                // move Sparks
+                MoveStars_SmallStars_Sparks();
+
+                // Eat Stars
+                EatStars(view[gameState - 5], players[gameState - 5], count, EatingCheck, EB, dix, scoreNumber, OnFire1Score[gameState - 5], starsNumberEaten);
+
+                // Collision Star With Window
+                for (int i = 0; i < stars[gameState - 5].size(); i++)
+                {
+                    if (stars[gameState - 5][i].getPosition().y < 120)
+                    {
+                        stars[gameState - 5].erase(stars[gameState - 5].begin() + i);
+                        smallStarsTimers[gameState - 5].erase(smallStarsTimers[gameState - 5].begin() + 0);
+                        for (int j = 0; j < counter[gameState - 5][i]; j++)
+                            smallStars[gameState - 5].erase(smallStars[gameState - 5].begin() + 0);
+                        counter[gameState - 5].erase(counter[gameState - 5].begin() + 0);
+                        count.erase(count.begin() + 0);
+                        for (int j = 0; j < countSpark1[gameState - 5][i]; j++)
+                        {
+                            sparks1[gameState - 5].erase(sparks1[gameState - 5].begin() + 0);
+                        }
+                        countSpark1[gameState - 5].erase(countSpark1[gameState - 5].begin() + 0);
+                        sparksTimer[gameState - 5].erase(sparksTimer[gameState - 5].begin() + 0);
+                    }
+                }
+
+                // Speed Effect
+                    // Create speed Effect
+                if (spwanTimerSpeed == 240)
+                {
+                    Speed.setPosition(rand() % (windowWidth - 40), windowHeight);
+                    speeds.push_back(Speed);
+                    spwanTimerSpeed = 0;
+                }
+                spwanTimerSpeed++;
+
+                // Move Speed Effect
+                for (int i = 0; i < speeds.size(); i++)
+                {
+                    speeds[i].move(0, -3);
+                }
+                // Collision With Player
+                for (int i = 0; i < speeds.size(); i++)
+                {
+                    if (players[gameState - 5].sprite.getGlobalBounds().intersects(speeds[i].getGlobalBounds()))
+                    {
+                        speeds.erase(speeds.begin() + i);
+                        speedStartSound.play();
+                        speedCheck = 1;
+                        speedTime = 0;
+                    }
+                }
+
+                if (speedCheck == 1)
+                {
+                    playerVelocityMaximum_x = 20;
+                    playerVelocityMaximum_y = 14;
+
+                    speedTime++;
+                    if (speedTime > 240)
+                    {
+                        speedTime = 0;
+                        speedCheck = 0;
+                        speedEndSound.play();
+                    }
+                }
+                else
+                {
+                    playerVelocityMaximum_x = 12;
+                    playerVelocityMaximum_y = 8;
+                }
+
+                // ======================================================================================================
+                // UPDATE MOVEMENT & PUSH TIMER (SMALL FISH)
+
+                if (enemy[gameState - 5][0].movement_time < 150) {
+                    enemy[gameState - 5][0].movement_time++;
+                }
+                if (enemy[gameState - 5][0].movement_time >= 150) {
+                    for (int i = 0; i < max_fishes; i++) {
+                        enemy[gameState - 5][0].movement[i] = (Vector2f(3.f * Direction[rand() % 3], 2.f * Direction[rand() % 3]));
+                        if (enemy[gameState - 5][0].movement[i].x == 0 && enemy[gameState - 5][0].movement[i].y == 0) {
+                            enemy[gameState - 5][0].movement[i] = (Vector2f(3.f, 2.f));
+                        }
+                    }
+                    enemy[gameState - 5][0].movement_time = 0;
+                }
+                if (enemy[gameState - 5][0].push_back_timer < 35) {
+                    enemy[gameState - 5][0].push_back_timer++;
+                }
+                if (enemy[gameState - 5][0].push_back_timer >= 35) {
+                    enemy[gameState - 5][0].push_back_timer = 0;
+                    enemy[gameState - 5][0].enemies.push_back(enemy[gameState - 5][0].sprite_enemy);
+                    enemy[gameState - 5][0].sprite_enemy.setPosition(push_position[rand() % 2]);
+
+                }
+
+                // UPDATE MOVEMENT & PUSH TIMER (MEDUIM FISH)
+
+                if (enemy[gameState - 5][1].movement_time < 150) {
+                    enemy[gameState - 5][1].movement_time++;
+                }
+                if (enemy[gameState - 5][1].movement_time >= 150) {
+                    for (int i = 0; i < max_fishes; i++) {
+                        enemy[gameState - 5][1].movement[i] = (Vector2f(3.f * Direction[rand() % 3], 2.f * Direction[rand() % 3])); // another dir
+                        if (enemy[gameState - 5][1].movement[i].x == 0 && enemy[gameState - 5][1].movement[i].y == 0) {
+                            enemy[gameState - 5][1].movement[i] = (Vector2f(3.f, 2.f));
+                        }
+                    }
+                    enemy[gameState - 5][1].movement_time = 0;
+                }
+                if (enemy[gameState - 5][1].push_back_timer < 150) {
+                    enemy[gameState - 5][1].push_back_timer++;
+                }
+                if (enemy[gameState - 5][1].push_back_timer >= 150) {
+                    enemy[gameState - 5][1].push_back_timer = 0;
+                    enemy[gameState - 5][1].enemies.push_back(enemy[gameState - 5][1].sprite_enemy);
+                    enemy[gameState - 5][1].sprite_enemy.setPosition(push_position[rand() % 2]);
+                }
+                // UPDATE MOVEMENT & PUSH TIMER (BIG FISH)
+
+                if (enemy[gameState - 5][2].movement_time < 250) {
+                    enemy[gameState - 5][2].movement_time++;
+                }
+                if (enemy[gameState - 5][2].movement_time >= 250) {
+                    for (int i = 0; i < max_fishes; i++) {
+                        enemy[gameState - 5][2].movement[i] = (Vector2f(3.f * Direction[rand() % 3], 2.f * Direction[rand() % 3]));  // another dir
+                        if (enemy[gameState - 5][2].movement[i].x == 0 && enemy[gameState - 5][2].movement[i].y == 0) {
+                            enemy[gameState - 5][2].movement[i] = (Vector2f(3.f, 2.f));
+                        }
+                    }
+                    enemy[gameState - 5][2].movement_time = 0;
+                }
+                if (enemy[gameState - 5][2].push_back_timer < 800) {
+                    enemy[gameState - 5][2].push_back_timer++;
+                }
+                if (enemy[gameState - 5][2].push_back_timer >= 800) {
+                    enemy[gameState - 5][2].push_back_timer = 0;
+                    enemy[gameState - 5][2].enemies.push_back(enemy[gameState - 5][2].sprite_enemy);
+                    enemy[gameState - 5][2].sprite_enemy.setPosition(push_position[rand() % 2]);
+                }
+                // ANIMATION (SMALL FISHES) 
+                for (int i = 0; i < max_fishes; i++) {
+                    enemy[gameState - 5][0].swimming_counter[i] += 0.1;
+                    if (enemy[gameState - 5][0].swimming_counter[i] >= 15) {  /// 14
+                        enemy[gameState - 5][0].swimming_counter[i] = 0.1;
+                    }
+                }
+                for (int i = 0; i < max_fishes; i++) {
+                    enemy[gameState - 5][0].turn2[i] += 0.27;
+                    enemy[gameState - 5][0].turn1[i] += 0.27;
+                }
+
+                for (int i = 0; i < enemy[gameState - 5][0].enemies.size(); i++) {
+                    //ANIMATION SMALL FISH LVL1
+                    if (gameState == 5) {
+                        if (enemy[gameState - 5][0].movement[i].x == -3 || (enemy[gameState - 5][0].movement[i].x == 0 && enemy[gameState - 5][0].movement[i].y == -2)) {
+                            enemy[gameState - 5][0].turn2[i] = 0;
+                            if (enemy[gameState - 5][0].turn1[i] <= 6) {
+                                enemy[gameState - 5][0].enemies[i].setTextureRect(IntRect(int(enemy[gameState - 5][0].turn1[i]) * enemy[gameState - 5][0].width + enemy[gameState - 5][0].width, enemy[gameState - 5][0].height + 1, -1 * (enemy[gameState - 5][0].width - 1), enemy[gameState - 5][0].height - 1));
+                            }
+                            else
+                                enemy[gameState - 5][0].enemies[i].setTextureRect(IntRect(int(enemy[gameState - 5][0].swimming_counter[i]) * enemy[gameState - 5][0].width + 1, +1, enemy[gameState - 5][0].width - 1, enemy[gameState - 5][0].height - 1));
+                        }
+                        else if (enemy[gameState - 5][0].movement[i].x == 3 || (enemy[gameState - 5][0].movement[i].x == 0 && enemy[gameState - 5][0].movement[i].y == 2)) {
+                            enemy[gameState - 5][0].turn1[i] = 0;
+                            if (enemy[gameState - 5][0].turn2[i] <= 6) {
+                                enemy[gameState - 5][0].enemies[i].setTextureRect(IntRect(int(enemy[gameState - 5][0].turn2[i]) * enemy[gameState - 5][0].width + 1, enemy[gameState - 5][0].height + 1, enemy[gameState - 5][0].width - 1, enemy[gameState - 5][0].height - 1));
+                            }
+                            else
+                                enemy[gameState - 5][0].enemies[i].setTextureRect(IntRect(int(enemy[gameState - 5][0].swimming_counter[i]) * enemy[gameState - 5][0].width + enemy[gameState - 5][0].width, 1, -1 * (enemy[gameState - 5][0].width - 1), enemy[gameState - 5][0].height - 1));
+                        }
+                    }
+                    //ANIMATION SMALL FISH LVL2
+                    else if (gameState == 6) {
+                        if (enemy[1][0].movement[i].x == -3 || (enemy[1][0].movement[i].x == 0 && enemy[1][0].movement[i].y == -2)) {
+                            enemy[1][0].turn2[i] = 0;
+                            if (enemy[1][0].turn1[i] <= 5) { ///5
+                                enemy[1][0].enemies[i].setTextureRect(IntRect(int(enemy[1][0].turn1[i]) * enemy[1][0].width + enemy[1][0].width, 3 * (enemy[1][0].height) + 1, -1 * (enemy[1][0].width - 1), enemy[1][0].height - 1));
+                            }
+                            else
+                                enemy[1][0].enemies[i].setTextureRect(IntRect(int(enemy[1][0].swimming_counter[i]) * enemy[1][0].width + 1, 1 + 2 * enemy[1][0].height, enemy[1][0].width - 1, enemy[1][0].height - 1));
+                        }
+                        else if (enemy[1][0].movement[i].x == 3 || (enemy[1][0].movement[i].x == 0 && enemy[1][0].movement[i].y == 2)) {
+                            enemy[1][0].turn1[i] = 0;
+                            if (enemy[1][0].turn2[i] <= 5) {  ///5
+                                enemy[1][0].enemies[i].setTextureRect(IntRect(int(enemy[1][0].turn2[i]) * enemy[1][0].width + 1, 3 * (enemy[1][0].height) + 1, enemy[1][0].width - 1, enemy[1][0].height - 1));
+                            }
+                            else
+                                enemy[1][0].enemies[i].setTextureRect(IntRect(int(enemy[1][0].swimming_counter[i]) * enemy[1][0].width + enemy[1][0].width, 1 + 2 * enemy[1][0].height, -1 * (enemy[1][0].width - 1), enemy[1][0].height - 1));
+                        }
+                    }
+                    else if (gameState == 7) {
+                        // ANIMATIOM SMALL FISH(TUNA) LVL3
+                        if ((enemy[2][0].movement[i].x == -3 || (enemy[2][0].movement[i].x == 0 && enemy[2][0].movement[i].y == -2)) && enemy[2][0].not_eating[i] == true) {
+                            enemy[2][0].turn2[i] = 0;
+                            if (enemy[2][0].turn1[i] <= 4) {
+                                enemy[2][0].enemies[i].setTextureRect(IntRect(int(enemy[2][0].turn1[i]) * enemy[2][0].width + enemy[2][0].width + 1, 2 * (enemy[2][0].height + 1), -1 * (enemy[2][0].width - 1), enemy[2][0].height - 1));
+                            }
+                            else
+                                enemy[2][0].enemies[i].setTextureRect(IntRect(int(enemy[2][0].swimming_counter[i]) * enemy[2][0].width + 2, enemy[2][0].height + 1, enemy[2][0].width - 1, enemy[2][0].height - 1));
+                        }
+                        else if ((enemy[2][0].movement[i].x == 3 || (enemy[2][0].movement[i].x == 0 && enemy[2][0].movement[i].y == 2)) && enemy[2][0].not_eating[i] == true) {
+                            enemy[2][0].turn1[i] = 0;
+                            if (enemy[2][0].turn2[i] <= 4) {
+                                enemy[2][0].enemies[i].setTextureRect(IntRect(int(enemy[2][0].turn2[i]) * enemy[2][0].width + 2, 2 * (enemy[2][0].height + 1), enemy[2][0].width - 1, enemy[2][0].height - 1));
+                            }
+                            else
+                                enemy[2][0].enemies[i].setTextureRect(IntRect(int(enemy[2][0].swimming_counter[i]) * enemy[2][0].width + enemy[2][0].width + 1, enemy[2][0].height + 1, -1 * (enemy[2][0].width - 1), enemy[2][0].height - 1));
+                        }
+                        // EATING
+                        else if ((enemy[2][0].movement[i].x == -3 || (enemy[2][0].movement[i].x == 0 && enemy[2][0].movement[i].y == -2)) && enemy[2][0].not_eating[i] == false) {
+                            if (enemy[2][0].eating_counter[i] <= 4) {
+                                enemy[2][0].enemies[i].setTextureRect(IntRect(int(enemy[2][0].eating_counter[i]) * enemy[2][0].width + 2, enemy[gameState - 5][1].height + 1, enemy[2][0].width - 1, enemy[2][0].height - 1));
+                            }
+                            else {
+                                enemy[2][0].not_eating[i] = true;
+                                enemy[2][0].eating_counter[i] = 0.f;
+                            }
+                        }
+                        // EATING
+                        else if ((enemy[2][0].movement[i].x == 3 || (enemy[2][0].movement[i].x == 0 && enemy[2][0].movement[i].y == -2)) && enemy[2][0].not_eating[i] == false) {
+                            if (enemy[2][0].eating_counter[i] <= 4) {
+                                enemy[2][0].enemies[i].setTextureRect(IntRect(int(enemy[2][0].eating_counter[i]) * enemy[2][0].width + enemy[2][0].width + 1, enemy[gameState - 5][1].height + 1, -1 * (enemy[2][0].width - 1), enemy[2][0].height - 1));
+                            }
+                            else {
+                                enemy[2][0].not_eating[i] = true;
+                                enemy[2][0].eating_counter[i] = 0.f;
+                            }
+                        }
+                    }
+                }
+
+
+                // ANIMATION (MEDUIM FISHES)
+                for (int i = 0; i < max_fishes; i++) {
+                    if (enemy[gameState - 5][1].not_eating[i] == true) {
+                        enemy[gameState - 5][1].swimming_counter[i] += 0.1;
+                        if (enemy[gameState - 5][1].swimming_counter[i] >= 14) {
+                            enemy[gameState - 5][1].swimming_counter[i] = 0.1f;
+                        }
+                        enemy[gameState - 5][1].turn2[i] += 0.27f;
+                        enemy[gameState - 5][1].turn1[i] += 0.27f;
+                    }
+                    else {
+                        enemy[gameState - 5][1].eating_counter[i] += 0.27f;
+                    }
+                }
+
+                for (int i = 0; i < enemy[gameState - 5][1].enemies.size(); i++) {
+                    if (gameState == 5 || gameState == 6) {
+                        if ((enemy[gameState - 5][1].movement[i].x == -3 || (enemy[gameState - 5][1].movement[i].x == 0 && enemy[gameState - 5][1].movement[i].y == -2)) && enemy[gameState - 5][1].not_eating[i] == true) {
+                            enemy[gameState - 5][1].turn2[i] = 0;
+                            if (enemy[gameState - 5][1].turn1[i] <= 4) {
+                                enemy[gameState - 5][1].enemies[i].setTextureRect(IntRect(int(enemy[gameState - 5][1].turn1[i]) * enemy[gameState - 5][1].width + enemy[gameState - 5][1].width + 1, 2 * (enemy[gameState - 5][1].height + 1), -1 * (enemy[gameState - 5][1].width - 1), enemy[gameState - 5][1].height - 2));
+                            }
+                            else
+                                enemy[gameState - 5][1].enemies[i].setTextureRect(IntRect(int(enemy[gameState - 5][1].swimming_counter[i]) * enemy[gameState - 5][1].width + 2, enemy[gameState - 5][1].height + 1, enemy[gameState - 5][1].width - 1, enemy[gameState - 5][1].height - 1));
+                        }
+                        else if ((enemy[gameState - 5][1].movement[i].x == 3 || (enemy[gameState - 5][1].movement[i].x == 0 && enemy[gameState - 5][1].movement[i].y == 2)) && enemy[gameState - 5][1].not_eating[i] == true) {
+                            enemy[gameState - 5][1].turn1[i] = 0;
+                            if (enemy[gameState - 5][1].turn2[i] <= 4) {
+                                enemy[gameState - 5][1].enemies[i].setTextureRect(IntRect(int(enemy[gameState - 5][1].turn2[i]) * enemy[gameState - 5][1].width + 2, 2 * (enemy[gameState - 5][1].height + 1), enemy[gameState - 5][1].width - 1, enemy[gameState - 5][1].height - 5));
+                            }
+                            else
+                                enemy[gameState - 5][1].enemies[i].setTextureRect(IntRect(int(enemy[gameState - 5][1].swimming_counter[i]) * enemy[gameState - 5][1].width + enemy[gameState - 5][1].width + 1, enemy[gameState - 5][1].height + 1, -1 * (enemy[gameState - 5][1].width - 1), enemy[gameState - 5][1].height - 1));
+                        }
+                        // EATING
+                        else if ((enemy[gameState - 5][1].movement[i].x == -3 || (enemy[gameState - 5][1].movement[i].x == 0 && enemy[gameState - 5][1].movement[i].y == -2)) && enemy[gameState - 5][1].not_eating[i] == false) {
+                            if (enemy[gameState - 5][1].eating_counter[i] <= 4) {
+                                enemy[gameState - 5][1].enemies[i].setTextureRect(IntRect(int(enemy[gameState - 5][1].eating_counter[i]) * enemy[gameState - 5][1].width + 2, +1, enemy[gameState - 5][1].width - 1, enemy[gameState - 5][1].height - 1));
+                            }
+                            else {
+                                enemy[gameState - 5][1].not_eating[i] = true;
+                                enemy[gameState - 5][1].eating_counter[i] = 0.f;
+                            }
+                        }
+                        // EATING
+                        else if ((enemy[gameState - 5][1].movement[i].x == 3 || (enemy[gameState - 5][1].movement[i].x == 0 && enemy[gameState - 5][1].movement[i].y == -2)) && enemy[gameState - 5][1].not_eating[i] == false) {
+                            if (enemy[gameState - 5][1].eating_counter[i] <= 4) {
+                                enemy[gameState - 5][1].enemies[i].setTextureRect(IntRect(int(enemy[gameState - 5][1].eating_counter[i]) * enemy[gameState - 5][1].width + enemy[gameState - 5][1].width + 1, +1, -1 * (enemy[gameState - 5][1].width - 1), enemy[gameState - 5][1].height - 1));
+                            }
+                            else {
+                                enemy[gameState - 5][1].not_eating[i] = true;
+                                enemy[gameState - 5][1].eating_counter[i] = 0.f;
+                            }
+                        }
+                    }
+                    else if (gameState == 7) {
+                        //ANIMATION MEDUIM FISH LVL3
+                        if ((enemy[2][1].movement[i].x == -3 || (enemy[2][1].movement[i].x == 0 && enemy[2][1].movement[i].y == -2)) && enemy[2][1].not_eating[i] == true) {
+                            enemy[2][1].turn2[i] = 0;
+                            if (enemy[2][1].turn1[i] <= 4) {
+                                enemy[2][1].enemies[i].setTextureRect(IntRect(int(enemy[2][1].turn1[i]) * enemy[2][1].width + enemy[2][1].width - 8, 2 * enemy[2][1].height + 2, -1 * (enemy[2][1].width - 2), enemy[2][1].height - 8));
+                            }
+                            else
+                                enemy[2][1].enemies[i].setTextureRect(IntRect(int(enemy[2][1].swimming_counter[i]) * enemy[2][1].width + 8, 1 * enemy[2][1].height + 4, enemy[2][1].width - 4, enemy[2][1].height - 8));
+                        }
+                        else if ((enemy[2][1].movement[i].x == 3 || (enemy[2][1].movement[i].x == 0 && enemy[2][1].movement[i].y == 2)) && enemy[2][1].not_eating[i] == true) {
+                            enemy[2][1].turn1[i] = 0;
+                            if (enemy[2][1].turn2[i] <= 4) {
+                                enemy[2][1].enemies[i].setTextureRect(IntRect(int(enemy[2][1].turn2[i]) * enemy[2][1].width + 8, 2 * enemy[2][1].height + 4, enemy[2][1].width - 4, enemy[2][1].height - 8));
+                            }
+                            else
+                                enemy[2][1].enemies[i].setTextureRect(IntRect(int(enemy[2][1].swimming_counter[i]) * enemy[2][1].width + enemy[2][1].width - 8, 1 * enemy[2][1].height + 2, -1 * (enemy[2][1].width - 2), enemy[2][1].height - 8));
+                        }
+                        // EATING
+                        if ((enemy[2][1].movement[i].x == -3 || (enemy[2][1].movement[i].x == 0 && enemy[2][1].movement[i].y == -2)) && enemy[2][1].not_eating[i] == false) {
+                            if (enemy[2][1].eating_counter[i] <= 4) {
+                                enemy[2][1].enemies[i].setTextureRect(IntRect(int(enemy[2][1].eating_counter[i]) * enemy[2][1].width + 8,/* 2 * enemy[2].height*/ +4, enemy[2][1].width - 4, enemy[2][1].height - 8));
+                            }
+                            else {
+                                enemy[2][1].not_eating[i] = true;
+                                enemy[2][1].eating_counter[i] = 0.f;
+                            }
+                        }
+                        // EATING
+                        else if ((enemy[2][1].movement[i].x == 3 || (enemy[2][1].movement[i].x == 0 && enemy[2][1].movement[i].y == -2)) && enemy[2][1].not_eating[i] == false) {
+                            if (enemy[2][1].eating_counter[i] <= 4) {
+                                enemy[2][1].enemies[i].setTextureRect(IntRect(int(enemy[2][1].eating_counter[i]) * enemy[2][1].width + enemy[2][1].width - 8, /*2 * enemy[2].height */+2, -1 * (enemy[2][1].width - 8), enemy[2][1].height - 2));
+                            }
+                            else {
+                                enemy[2][1].not_eating[i] = true;
+                                enemy[2][1].eating_counter[i] = 0.f;
+                            }
+                        }
+                    }
+                }
+                // ANIMATION (BIG FISH)
+                for (int i = 0; i < max_fishes; i++) {
+                    if (enemy[gameState - 5][2].not_eating[i] == true) {
+                        enemy[gameState - 5][2].swimming_counter[i] += 0.1;
+                        if (enemy[gameState - 5][2].swimming_counter[i] >= 14) {
+                            enemy[gameState - 5][2].swimming_counter[i] = 0.1;
+                        }
+                        enemy[gameState - 5][2].turn2[i] += 0.27;
+                        enemy[gameState - 5][2].turn1[i] += 0.27;
+                    }
+                    else {
+                        enemy[gameState - 5][2].eating_counter[i] += 0.27f;
+                    }
+
+                }
+
+                for (int i = 0; i < enemy[gameState - 5][2].enemies.size(); i++) {
+                    if (gameState == 5) {
+                        if ((enemy[gameState - 5][2].movement[i].x < -3 || (enemy[gameState - 5][2].movement[i].x == 0 && enemy[gameState - 5][2].movement[i].y == -2)) && enemy[gameState - 5][2].not_eating[i] == true) {
+                            enemy[gameState - 5][2].turn2[i] = 0;
+                            if (enemy[gameState - 5][2].turn1[i] <= 4) {
+                                enemy[gameState - 5][2].enemies[i].setTextureRect(IntRect(int(enemy[gameState - 5][2].turn1[i]) * enemy[gameState - 5][2].width + enemy[gameState - 5][2].width, 3 * enemy[gameState - 5][2].height + 2, -1 * (enemy[gameState - 5][2].width - 2), enemy[gameState - 5][2].height - 2));
+                            }
+                            else
+                                enemy[gameState - 5][2].enemies[i].setTextureRect(IntRect(int(enemy[gameState - 5][2].swimming_counter[i]) * enemy[gameState - 5][2].width + 4, 2 * enemy[gameState - 5][2].height + 4, enemy[gameState - 5][2].width - 4, enemy[gameState - 5][2].height - 4));
+                        }
+                        else if ((enemy[gameState - 5][2].movement[i].x == 3 || (enemy[gameState - 5][2].movement[i].x == 0 && enemy[gameState - 5][2].movement[i].y == 2)) && enemy[gameState - 5][2].not_eating[i] == true) {
+                            enemy[gameState - 5][2].turn1[i] = 0;
+                            if (enemy[gameState - 5][2].turn2[i] <= 4) {
+                                enemy[gameState - 5][2].enemies[i].setTextureRect(IntRect(int(enemy[gameState - 5][2].turn2[i]) * enemy[gameState - 5][2].width + 4, 3 * enemy[gameState - 5][2].height + 4, enemy[gameState - 5][2].width - 4, enemy[gameState - 5][2].height - 4));
+                            }
+                            else
+                                enemy[gameState - 5][2].enemies[i].setTextureRect(IntRect(int(enemy[gameState - 5][2].swimming_counter[i]) * enemy[gameState - 5][2].width + enemy[gameState - 5][2].width, 2 * enemy[gameState - 5][2].height + 2, -1 * (enemy[gameState - 5][2].width - 2), enemy[gameState - 5][2].height - 2));
+                        }
+                        // EATING
+                        if ((enemy[gameState - 5][2].movement[i].x == -3 || (enemy[gameState - 5][2].movement[i].x == 0 && enemy[gameState - 5][2].movement[i].y == -2)) && enemy[gameState - 5][2].not_eating[i] == false) {
+                            if (enemy[gameState - 5][2].eating_counter[i] <= 4) {
+                                enemy[gameState - 5][2].enemies[i].setTextureRect(IntRect(int(enemy[gameState - 5][2].eating_counter[i]) * enemy[gameState - 5][2].width + 4,/* 2 * enemy[2].height*/ +4, enemy[gameState - 5][2].width - 4, enemy[gameState - 5][2].height - 4));
+                            }
+                            else {
+                                enemy[gameState - 5][2].not_eating[i] = true;
+                                enemy[gameState - 5][2].eating_counter[i] = 0.f;
+                            }
+                        }
+                        // EATING
+                        else if ((enemy[gameState - 5][2].movement[i].x == 3 || (enemy[gameState - 5][2].movement[i].x == 0 && enemy[gameState - 5][2].movement[i].y == -2)) && enemy[gameState - 5][2].not_eating[i] == false) {
+                            if (enemy[gameState - 5][2].eating_counter[i] <= 4) {
+                                enemy[gameState - 5][2].enemies[i].setTextureRect(IntRect(int(enemy[gameState - 5][2].eating_counter[i]) * enemy[gameState - 5][2].width + enemy[gameState - 5][2].width, /*2 * enemy[2].height */+2, -1 * (enemy[gameState - 5][2].width - 2), enemy[gameState - 5][2].height - 2));
+                            }
+                            else {
+                                enemy[gameState - 5][2].not_eating[i] = true;
+                                enemy[gameState - 5][2].eating_counter[i] = 0.f;
+                            }
+                        }
+                    }
+                    else if (gameState == 6) {
+                        if ((enemy[gameState - 5][2].movement[i].x == -3 || (enemy[gameState - 5][2].movement[i].x == 0 && enemy[gameState - 5][2].movement[i].y == -2)) && enemy[gameState - 5][2].not_eating[i] == true) {
+                            enemy[gameState - 5][2].turn2[i] = 0;
+                            if (enemy[gameState - 5][2].turn1[i] <= 4) {
+                                enemy[gameState - 5][1].enemies[i].setTextureRect(IntRect(int(enemy[gameState - 5][2].turn1[i]) * enemy[gameState - 5][2].width + enemy[gameState - 5][2].width + 1, 2 * (enemy[gameState - 5][2].height + 1), -1 * (enemy[gameState - 5][2].width - 1), enemy[gameState - 5][2].height - 1));
+                            }
+                            else
+                                enemy[gameState - 5][2].enemies[i].setTextureRect(IntRect(int(enemy[gameState - 5][2].swimming_counter[i]) * enemy[gameState - 5][2].width + 2, enemy[gameState - 5][2].height + 1, enemy[gameState - 5][2].width - 1, enemy[gameState - 5][2].height - 1));
+                        }
+                        else if ((enemy[gameState - 5][2].movement[i].x == 3 || (enemy[gameState - 5][2].movement[i].x == 0 && enemy[gameState - 5][2].movement[i].y == 2)) && enemy[gameState - 5][2].not_eating[i] == true) {
+                            enemy[gameState - 5][2].turn1[i] = 0;
+                            if (enemy[gameState - 5][2].turn2[i] <= 4) {
+                                enemy[gameState - 5][2].enemies[i].setTextureRect(IntRect(int(enemy[gameState - 5][2].turn2[i]) * enemy[gameState - 5][2].width + 2, 2 * (enemy[gameState - 5][2].height + 1), enemy[gameState - 5][2].width - 1, enemy[gameState - 5][2].height - 1));
+                            }
+                            else
+                                enemy[gameState - 5][2].enemies[i].setTextureRect(IntRect(int(enemy[gameState - 5][2].swimming_counter[i]) * enemy[gameState - 5][2].width + enemy[gameState - 5][2].width + 1, enemy[gameState - 5][2].height + 1, -1 * (enemy[gameState - 5][2].width - 1), enemy[gameState - 5][2].height - 1));
+                        }
+                        // EATING
+                        else if ((enemy[gameState - 5][2].movement[i].x == -3 || (enemy[gameState - 5][2].movement[i].x == 0 && enemy[gameState - 5][2].movement[i].y == -2)) && enemy[gameState - 5][2].not_eating[i] == false) {
+                            if (enemy[gameState - 5][2].eating_counter[i] <= 4) {
+                                enemy[gameState - 5][2].enemies[i].setTextureRect(IntRect(int(enemy[gameState - 5][2].eating_counter[i]) * enemy[gameState - 5][2].width + 2, +1, enemy[gameState - 5][2].width - 1, enemy[gameState - 5][2].height - 1));
+                            }
+                            else {
+                                enemy[gameState - 5][2].not_eating[i] = true;
+                                enemy[gameState - 5][2].eating_counter[i] = 0.f;
+                            }
+                        }
+                        // EATING
+                        else if ((enemy[gameState - 5][2].movement[i].x == 3 || (enemy[gameState - 5][2].movement[i].x == 0 && enemy[gameState - 5][2].movement[i].y == -2)) && enemy[gameState - 5][2].not_eating[i] == false) {
+                            if (enemy[gameState - 5][2].eating_counter[i] <= 4) {
+                                enemy[gameState - 5][2].enemies[i].setTextureRect(IntRect(int(enemy[gameState - 5][2].eating_counter[i]) * enemy[gameState - 5][2].width + enemy[gameState - 5][1].width - 6, +1, -1 * (enemy[gameState - 5][2].width - 6), enemy[gameState - 5][2].height - 1));
+                            }
+                            else {
+                                enemy[gameState - 5][2].not_eating[i] = true;
+                                enemy[gameState - 5][2].eating_counter[i] = 0.f;
+                            }
+                        }
+                    }
+                    else if (gameState == 7) {
+                        //ANIMATION BIG FSH LVL3
+                        if (gameState == 7) {
+                            if ((enemy[2][2].movement[i].x == -3 || (enemy[2][2].movement[i].x == 0 && enemy[2][2].movement[i].y == -2)) && enemy[2][2].not_eating[i] == true) {
+                                enemy[2][2].turn2[i] = 0;
+                                if (enemy[2][2].turn1[i] <= 4) {
+                                    enemy[2][2].enemies[i].setTextureRect(IntRect(int(enemy[2][2].turn1[i]) * enemy[2][2].width + enemy[2][2].width, 2 * enemy[2][2].height + 2, -1 * (enemy[2][2].width - 2), enemy[2][2].height - 2));
+                                }
+                                else
+                                    enemy[2][2].enemies[i].setTextureRect(IntRect(int(enemy[2][2].swimming_counter[i]) * enemy[2][2].width + 4, 1 * enemy[2][2].height + 4, enemy[2][2].width - 4, enemy[2][2].height - 4));
+                            }
+                            else if ((enemy[2][2].movement[i].x == 3 || (enemy[2][2].movement[i].x == 0 && enemy[2][2].movement[i].y == 2)) && enemy[2][2].not_eating[i] == true) {
+                                enemy[2][2].turn1[i] = 0;
+                                if (enemy[2][2].turn2[i] <= 4) {
+                                    enemy[2][2].enemies[i].setTextureRect(IntRect(int(enemy[2][2].turn2[i]) * enemy[2][2].width + 4, 2 * enemy[2][2].height + 4, enemy[2][2].width - 4, enemy[2][2].height - 4));
+                                }
+                                else
+                                    enemy[2][2].enemies[i].setTextureRect(IntRect(int(enemy[2][2].swimming_counter[i]) * enemy[2][2].width + enemy[2][2].width, 1 * enemy[2][2].height + 2, -1 * (enemy[2][2].width - 2), enemy[2][2].height - 2));
+                            }
+                            // EATING
+                            if ((enemy[2][2].movement[i].x == -3 || (enemy[2][2].movement[i].x == 0 && enemy[2][2].movement[i].y == -2)) && enemy[2][2].not_eating[i] == false) {
+                                if (enemy[2][2].eating_counter[i] <= 4) {
+                                    enemy[2][2].enemies[i].setTextureRect(IntRect(int(enemy[2][2].eating_counter[i]) * enemy[2][2].width + 4,/* 2 * enemy[2].height*/ +4, enemy[2][2].width - 4, enemy[2][2].height - 4));
+                                }
+                                else {
+                                    enemy[2][2].not_eating[i] = true;
+                                    enemy[2][2].eating_counter[i] = 0.f;
+                                }
+                            }
+                            // EATING
+                            else if ((enemy[2][2].movement[i].x == 3 || (enemy[2][2].movement[i].x == 0 && enemy[2][2].movement[i].y == -2)) && enemy[2][2].not_eating[i] == false) {
+                                if (enemy[2][2].eating_counter[i] <= 4) {
+                                    enemy[2][2].enemies[i].setTextureRect(IntRect(int(enemy[2][2].eating_counter[i]) * enemy[2][2].width + enemy[2][2].width, /*2 * enemy[2].height */+2, -1 * (enemy[2][2].width - 2), enemy[2][2].height - 2));
+                                }
+                                else {
+                                    enemy[2][2].not_eating[i] = true;
+                                    enemy[2][2].eating_counter[i] = 0.f;
+                                }
+                            }
+                        }
+                    }
+
+
+                }
+                // MOVING 
+                // SMALL FISH
+                for (int i = 0; i < enemy[gameState - 5][0].enemies.size(); i++) {
+                    enemy[gameState - 5][0].enemies[i].move(enemy[gameState - 5][0].movement[i].x, enemy[gameState - 5][0].movement[i].y);
+                }
+                // MEDUIM FISH
+                for (int i = 0; i < enemy[gameState - 5][1].enemies.size(); i++) {
+                    enemy[gameState - 5][1].enemies[i].move(enemy[gameState - 5][1].movement[i].x, enemy[gameState - 5][1].movement[i].y);
+                }
+                // BIG FISH
+                for (int i = 0; i < enemy[gameState - 5][2].enemies.size(); i++) {
+                    enemy[gameState - 5][2].enemies[i].move(enemy[gameState - 5][2].movement[i].x, enemy[gameState - 5][2].movement[i].y);
+                }
+
+                // COLLISION
+
+                // BIG FISH WITH OTHER ENEMIES
+                for (int i = 0; i < enemy[gameState - 5][2].enemies.size(); i++) {
+                    for (int k = 0; k < enemy[gameState - 5][1].enemies.size(); k++) {
+                        if (enemy[gameState - 5][2].enemies[i].getGlobalBounds().intersects(enemy[gameState - 5][1].enemies[k].getGlobalBounds())) {
+                            enemy[gameState - 5][2].not_eating[i] = false;
+                            enemy[gameState - 5][1].enemies.erase(enemy[gameState - 5][1].enemies.begin() + k);
+                            break;
+                        }
+                    }
+                    for (int j = 0; j < enemy[gameState - 5][0].enemies.size(); j++) {
+                        if (enemy[gameState - 5][2].enemies[i].getGlobalBounds().intersects(enemy[gameState - 5][0].enemies[j].getGlobalBounds())) {
+                            enemy[gameState - 5][2].not_eating[i] = false;
+                            enemy[gameState - 5][0].enemies.erase(enemy[gameState - 5][0].enemies.begin() + j);
+                            break;
+                        }
+                    }
+
+                }
+                // MEDUIM FIEH WITH OTHER ENEMIES
+                for (int i = 0; i < enemy[gameState - 5][1].enemies.size(); i++) {
+                    for (int j = 0; j < enemy[gameState - 5][0].enemies.size(); j++) {
+                        if (enemy[gameState - 5][1].enemies[i].getGlobalBounds().intersects(enemy[gameState - 5][0].enemies[j].getGlobalBounds())) {
+                            enemy[gameState - 5][1].not_eating[i] = false;
+                            enemy[gameState - 5][0].enemies.erase(enemy[gameState - 5][0].enemies.begin() + j);
+                            break;
+                        }
+                    }
+                }
+                // PLAYER WITH ENEMIES
+                // 5 OPTIONS COUNTING ON POINTS I HAVE THE COLLISION OF THEM AND ANIMATION OF MEDUIM AND BIG IF HAPPEND COLLSION
+                // AND THE POINTS WERE LESS THAN NATURAL
+
+                // ======================================================================================================
+                //f1------------------------------------------
+                for (int i = 0; i < enemy[gameState - 5][0].enemies.size(); i++)
+                {
+                    // collision with player
+                    if (players[gameState - 5].sprite.getGlobalBounds().intersects(enemy[gameState - 5][0].enemies[i].getGlobalBounds()) && reberthCheck[gameState - 5] == 0 && players[gameState - 5].dieCheck == 0)
+                    {
+                        EatingCheck = 1;
+                        if (OnFire1Score[gameState - 5] + 0.2 < 4)
+                            OnFire1Score[gameState - 5] += 0.2;
+                        if (EB == 1)
+                            bubbsT = 0;
+
+                        EB = 1;
+
+                        enemy[gameState - 5][0].enemies[i].setScale(0, 0);
+                        bite1Sound.play();
+                        scoreNumber = 10;
+                        ScoreEffectCreate(view[gameState - 5], dix, players[gameState - 5].sprite, OnFire1Score[gameState - 5], scoreNumber);
+                        f1NumberEaten[gameState - 5]++;
+                        players[gameState - 5].score += scoreNumber * (int)OnFire1Score[gameState - 5];
+                        hb_score[gameState - 5] += scoreNumber;
+                    }
+                    // collision with boom
+                    for (int j = 0; j < booms.size(); j++)
+                    {
+                        if (booms[j].getGlobalBounds().intersects(enemy[gameState - 5][0].enemies[i].getGlobalBounds()) && booms[j].getPosition().y > 150) //boom die
+                        {
+                            BoomExplosion(boomEffects, booms, j, boomsStopPosition, boomsTimerLife, boomSound, boomsCheck);
+                            enemy[gameState - 5][0].enemies[i].setScale(0, 0);
+                        }
+                    }
+
+                }
+                // f2----------------------------------------------
+                for (int i = 0; i < enemy[gameState - 5][1].enemies.size(); i++)
+                {
+                    // collision with player
+                    if (players[gameState - 5].sprite.getGlobalBounds().intersects(enemy[gameState - 5][1].enemies[i].getGlobalBounds()) && reberthCheck_not_Eaten[gameState - 5] == 0 && players[gameState - 5].dieCheck == 0)
+                    {
+                        if (MaximizeCheck1[gameState - 5] == 1)
+                        {
+                            EatingCheck = 1;
+                            if (OnFire1Score[gameState - 5] + 0.2 < 4)
+                                OnFire1Score[gameState - 5] += 0.2;
+                            if (EB == 1)
+                                bubbsT = 0;
+
+                            EB = 1;
+
+                            enemy[gameState - 5][1].enemies[i].setScale(0, 0);
+                            bite2Sound.play();
+                            scoreNumber = 20;
+                            ScoreEffectCreate(view[gameState - 5], dix, players[gameState - 5].sprite, OnFire1Score[gameState - 5], scoreNumber);
+                            f2NumberEaten[gameState - 5]++;
+                            players[gameState - 5].score += scoreNumber * (int)OnFire1Score[gameState - 5];
+                            hb_score[gameState - 5] += scoreNumber;
+                        }
+                        else
+                        {
+                            players[gameState - 5].health--;
+                            players[gameState - 5].dieCheck = 1;
+                            enemy[gameState - 5][1].not_eating[i] = false;
+                        }
+                    }
+                    // collision with boom
+                    for (int j = 0; j < booms.size(); j++)
+                    {
+                        if (booms[j].getGlobalBounds().intersects(enemy[gameState - 5][1].enemies[i].getGlobalBounds()) && booms[j].getPosition().y > 150) //boom die
+                        {
+                            BoomExplosion(boomEffects, booms, j, boomsStopPosition, boomsTimerLife, boomSound, boomsCheck);
+                            enemy[gameState - 5][1].enemies[i].setScale(0, 0);
+                        }
+                    }
+                }
+                // f3----------------------------------------------
+                for (int i = 0; i < enemy[gameState - 5][2].enemies.size(); i++)
+                {
+                    // collision with player
+                    if (players[gameState - 5].sprite.getGlobalBounds().intersects(enemy[gameState - 5][2].enemies[i].getGlobalBounds()) && reberthCheck_not_Eaten[gameState - 5] == 0 && players[gameState - 5].dieCheck == 0)
+                    {
+                        if (MaximizeCheck2[gameState - 5] == 1)
+                        {
+                            EatingCheck = 1;
+                            if (OnFire1Score[gameState - 5] + 0.2 < 4)
+                                OnFire1Score[gameState - 5] += 0.2;
+                            if (EB == 1)
+                                bubbsT = 0;
+
+                            EB = 1;
+
+                            enemy[gameState - 5][2].enemies[i].setScale(0, 0);
+                            bite3Sound.play();
+                            scoreNumber = 30;
+                            ScoreEffectCreate(view[gameState - 5], dix, players[gameState - 5].sprite, OnFire1Score[gameState - 5], scoreNumber);
+                            f3NumberEaten[gameState - 5]++;
+                            players[gameState - 5].score += scoreNumber * (int)OnFire1Score[gameState - 5];
+                            hb_score[gameState - 5] += scoreNumber;
+                        }
+                        else
+                        {
+                            players[gameState - 5].health--;
+                            players[gameState - 5].dieCheck = 1;
+                            enemy[gameState - 5][2].not_eating[i] = false;
+                        }
+                    }
+                    // collision with boom
+                    for (int j = 0; j < booms.size(); j++)
+                    {
+                        if (booms[j].getGlobalBounds().intersects(enemy[gameState - 5][1].enemies[i].getGlobalBounds()) && booms[j].getPosition().y > 150) //boom die
+                        {
+                            BoomExplosion(boomEffects, booms, j, boomsStopPosition, boomsTimerLife, boomSound, boomsCheck);
+                            enemy[gameState - 5][2].enemies[i].setScale(0, 0);
+                        }
+                    }
+                }
+
+
+
+                // OnFire Effects
+                OnFire(OnFire1Score[gameState - 5], OnFire1ScorePrev[gameState - 5], c1[gameState - 5], c2[gameState - 5], players[gameState - 5].sprite, OnFire1Check[gameState - 5], OnFire1Timer[gameState - 5]);
+
+                OnFire1ScorePrev[gameState - 5] = OnFire1Score[gameState - 5];
+
+                // Score effect
+                ScoreEffectControl(window);
+
+
+                mouseInWindowRangeCheck = 1;
+
+                // keep mouse in window
+                KeepMouseInWindow(mousePosition, window, windowPo, mouseInWindowRangeCheck, mouse_Position_Current.y, mouse_Position_Current.x);
+
+                //Vectory Effect
+
+
+                // Moving view
+                VIEW(players[gameState - 5].sprite, players[gameState - 5].playerFinalVelocity_x, players[gameState - 5].playerFinalVelocity_y, items, itemsNumber);
+                spwanTimerboom++;
+
+                if (gameState == 5)   // play just in level one 
+                {
+                    // Boom
+                    if (spwanTimerboom == 420)  // create New boom
+                    {
+                        spwanTimerboom = 0;
+                        boom.setPosition(rand() % 1250, 0);
+                        booms.push_back(boom);
+                        boomsTimerLife.push_back(0);
+                        boomsStopPosition.push_back(rand() % 201 + 500);  // Stop moving boom on The Range (500 -> 700) in y-axis
+                    }
+
+                    for (int i = 0; i < booms.size(); i++)
+                    {
+                        boomsTimerLife[i]++;
+
+                        if (boomsTimerLife[i] == 600 && booms[i].getScale().x == 1) // boom die 
+                            BoomExplosion(boomEffects, booms, i, boomsStopPosition, boomsTimerLife, boomSound, boomsCheck);
+
+                        if (booms[i].getGlobalBounds().intersects(players[gameState - 5].sprite.getGlobalBounds()) && reberthCheck_not_Eaten[gameState - 5] == 0 && players[gameState - 5].dieCheck == 0) //collision with player
+                        {
+                            BoomExplosion(boomEffects, booms, i, boomsStopPosition, boomsTimerLife, boomSound, boomsCheck);
+                            players[gameState - 5].health--;
+                            players[gameState - 5].dieCheck = 1;
+                        }
+                    }
+
+                    for (int i = 0; i < booms.size(); i++)
+                        if (booms[i].getPosition().y <= boomsStopPosition[i])  // move the boom until it dosenot exceed the stop position
+                            booms[i].move(0, 3);
+
+                    if (boomsCheck == 1)
+                    {
+                        if (boom_Effects_Animation_Counter <= 4)
+                        {
+                            boomEffects.setScale(1, 1);
+                            boomEffects.setTextureRect(IntRect((int)boom_Effects_Animation_Counter * 164.4 + 4, 71, 155, 135));
+                            boom_Effects_Animation_Counter += 0.1;
+                        }
+                        else
+                        {
+                            boom_Effects_Animation_Counter = 0;
+                            boomsCheck = 0;
+                            boomEffects.setScale(0, 0);
+                        }
+
+                    }
+                }
+
+
+                // Update Score Text
+                SCORE_0.setString("" + to_string(players[gameState - 5].score));
+                hb.setSize(Vector2f((float)hb_score[gameState - 5] * (35.f / 90), 15.f));
+
+
+
+                // Final velocity of the player
+                players[gameState - 5].playerFinalVelocity_x = mouseVelocity_x[gameState - 5] + turboVelocity.x;
+                players[gameState - 5].playerFinalVelocity_y = mouseVelocity_y[gameState - 5] + turboVelocity.y;
+
+                players[gameState - 5].sprite.move(players[gameState - 5].playerFinalVelocity_x, players[gameState - 5].playerFinalVelocity_y);
+
+
+                mouse_Position_Previous.x = mouse_Position_Current.x;
+                mouse_Position_Previous.y = mouse_Position_Current.y;
+            }
+            // Perfect Effect
+            if (hb_score[gameState - 5] >= 900)
+            {
+                finishingTime[gameState - 5]++;
+                PerfectDisplay(LevelsMusic[gameState - 5]);
+                PerfectTime[gameState - 5]++;
+                winingCheck[gameState - 5] = 1;
+            }
+
+            // Sorry Effect
+            if (players[gameState - 5].dieCheck == 1 && players[gameState - 5].health != 0)
+            {
+                if (players[gameState - 5].dieTimer <= 200)
+                {
+                    players[gameState - 5].sprite.setScale(0, 0);
+                    SorryDisplay(LevelsMusic[gameState - 5]);
+                    SorryTime[gameState - 5]++;
+                    players[gameState - 5].dieTimer++;
+                }
+                else  // Reset Sorry Effect
+                {
+                    players[gameState - 5].dieCheck = 0;
+
+                    Bubs1[0][0].setPosition(340, 545);
+                    Sorry[0][0].setPosition(Sorry[0][0].getPosition().x, 505);
+                    Sorry[0][0].setScale(0, 0);
+                    Bubs1[0][0].setScale(0, 0);
+                    for (int i = 1; i < 5; i++)
+                    {
+                        Bubs1[0][i].setScale(0, 0);
+                        Bubs1[0][i].setPosition(Bubs1[0][i].getPosition().x, 545);
+                        Sorry[0][i].setScale(0, 0);
+                        Sorry[0][i].setPosition(Sorry[0][i].getPosition().x, 505);
+                    }
+                    for (int i = 1; i < 3; i++)
+                    {
+                        for (int j = 0; j < 5; j++)
+                        {
+                            Sorry[i][j] = Sorry[0][j];
+                            Bubs1[i][j] = Bubs1[0][j];
+                        }
+                    }
+                    SorryTime[gameState - 5] = 0;
+                    players[gameState - 5].dieTimer = 0;
+                    endSorry[gameState - 5] = 0;
+
+                    // Reset View
+                    view[gameState - 5].setCenter(windowWidth / 2, 5 + view[gameState - 5].getSize().y / 2);
+                    // Reset BackGround Items
+                    if (gameState == 5)
+                    {
+                        items[0][0].setPosition(550, window.getSize().y - 108 * 1.4 + 127);
+                        items[0][1].setPosition(270, items[0][1].getPosition().y);
+                        items[0][2].setPosition(800, windowHeight - 180 + 127);
+                        items[0][3].setPosition(640, items[0][2].getPosition().y);
+                        items[0][4].setPosition(200, windowHeight + 145 - 110 * 1.3);
+                        items[0][5].setPosition(1100, windowHeight + 145 - 115);
+                        items[0][6].setPosition(-61, 820);
+                    }
+                    else if (gameState == 7)
+                    {
+                        items[2][0].setPosition(680, windowHeight - 133 * 1.4 + 127);
+                        items[2][1].setPosition(1350, windowHeight - 144 * 1.5 + 150);
+                        items[2][2].setPosition(1100, 950);
+                        items[2][3].setPosition(-80, windowHeight - 146 * 1.3 + 150);
+                        items[2][4].setPosition(-6, windowHeight + 150 - 80);
+                    }
+
+                    // Reberth player
+                    reberthCheck[gameState - 5] = 1;
+                    reberthCheck_not_Eaten[gameState - 5] = 1;
+
+                }
+                if (players[gameState - 5].dieTimer == 1)
+                {
+                    mouseVelocity_x[gameState - 5] = 0;
+                    turboVelocity.x = 0;
+                    mouseVelocity_y[gameState - 5] = 0;
+                    turboVelocity.y = 0;
+                }
+            }
+            // Losing Effect
+            if ((levelTime[gameState - 5] >= 18000 || players[gameState - 5].health <= 0) && winingCheck[gameState - 5] == 0)
+            {
+                finishingTime[gameState - 5]++;
+                SorryDisplay(LevelsMusic[gameState - 5]);
+                SorryTime[gameState - 5]++;
+                losingCheck[gameState - 5] = 1;
+            }
+            if (finishingTime[gameState - 5] >= 200) // End Game condition
+            {
+                if (winingCheck[gameState - 5] == 1)  // wining
+                {
+                    numbersEatenText[gameState - 5][0].setString(to_string(f1NumberEaten[gameState - 5]));
+                    numbersEatenText[gameState - 5][1].setString(to_string(f2NumberEaten[gameState - 5]));
+                    numbersEatenText[gameState - 5][2].setString(to_string(f3NumberEaten[gameState - 5]));
+                    numberStarsEatenText[gameState - 5].setString(to_string(starsNumberEaten[gameState - 5]));
+                    resultTime[gameState - 5]++;
+
+
+                    resultBoard.setScale(2, 2);
+                    Title.setScale(2, 2);
+                    stageCompleted.setScale(1, 1);
+
+                    starBoard.setScale(2, 2);
+                    enemeisBoard[gameState - 5][0].setScale(1.6, 1.6);
+                    enemeisBoard[gameState - 5][1].setScale(0.9, 0.9);
+                    enemeisBoard[gameState - 5][2].setScale(0.7, 0.7);
+
+                    ScoreBoard[gameState - 5].setString("Score : " + to_string(players[gameState - 5].score));
+
+
+                    if (resultTime[gameState - 5] == 30)
+                    {
+                        numbersEatenText[gameState - 5][0].setScale(1, 1);
+                        Chomp.setPosition(numbersEatenText[gameState - 5][0].getPosition().x, numbersEatenText[gameState - 5][0].getPosition().y - 10);
+                        bite1Sound.play();
+                    }
+                    if (resultTime[gameState - 5] == 60)
+                    {
+                        numbersEatenText[gameState - 5][1].setScale(1, 1);
+                        Chomp.setPosition(numbersEatenText[gameState - 5][1].getPosition().x, numbersEatenText[gameState - 5][1].getPosition().y - 10);
+                        bite1Sound.play();
+                    }
+                    if (resultTime[gameState - 5] == 90)
+                    {
+                        numbersEatenText[gameState - 5][2].setScale(1, 1);
+                        Chomp.setPosition(numbersEatenText[gameState - 5][2].getPosition().x, numbersEatenText[gameState - 5][2].getPosition().y - 10);
+                        bite1Sound.play();
+                    }
+                    if (resultTime[gameState - 5] == 120)
+                    {
+                        numberStarsEatenText[gameState - 5].setScale(1, 1);
+                        Chomp.setPosition(numberStarsEatenText[gameState - 5].getPosition().x, numberStarsEatenText[gameState - 5].getPosition().y - 10);
+                        bite1Sound.play();
+                    }
+                    if (resultTime[gameState - 5] == 150)
+                        ScoreBoard[gameState - 5].setScale(1, 1);
+
+                    Chomp.move(0, -0.5);
+                    if (ContinueUnSelctedWining.getGlobalBounds().intersects(mouse.getGlobalBounds()))
+                    {
+                        ContinueSelctedCheckWining = 1;
+                        if (Mouse::isButtonPressed(Mouse::Left))
+                            gameState = 4;
+                    }
+                    else
+                        ContinueSelctedCheckWining = 0;
+                }
+                else if (losingCheck[gameState - 5] == 1)    // Losing Apdate
+                {
+                    GameOver.setScale(1, 1);
+                    if (ContinueUnSelctedLosing.getGlobalBounds().intersects(mouse.getGlobalBounds()))
+                    {
+                        ContinueSelctedCheckLosing = 1;
+                        if (Mouse::isButtonPressed(Mouse::Left))
+                            gameState = 4;
+                    }
+                    else
+                        ContinueSelctedCheckLosing = 0;
+
+                    if (QuitButtonUnSelected.getGlobalBounds().intersects(mouse.getGlobalBounds()))
+                    {
+                        QuitSelctedCheck = 1;
+                        if (Mouse::isButtonPressed(Mouse::Left))
+                            gameState = 0;
+                    }
+                    else
+                        QuitSelctedCheck = 0;
+                }
+            }
+        }
+
+        // quit the menu
+        if ((gameStatePrevious == 8 || gameStatePrevious == 4 || gameStatePrevious == 5 || gameStatePrevious == 6 || gameStatePrevious == 7) && gameState == 0)
+        {
+
+            // Save Score
+            User currentPlayerScore;
+            currentPlayerScore.playerName = name;
+            currentPlayerScore.score = players[0].score + players[1].score + players[2].score;
+            saveScore(currentPlayerScore);
+
+            // Reset The Game
+            view[0].setCenter(windowWidth / 2, 5 + view[0].getSize().y / 2);
+            view[1] = view[0];
+            view[2] = view[0];
+
+
+            // players
+            for (int i = 0; i < 3; i++)
+                players[i].sprite.setPosition(windowWidth / 2, 150);
+
+            players[0].sprite.setScale(0.6, 0.6);
+            players[2].sprite.setScale(players[0].sprite.getGlobalBounds().width / 186, players[0].sprite.getGlobalBounds().height / 166);
+            playersScale_x[0] = 0.6;
+            playersScale_y[0] = 0.6;
+            playersScale_x[2] = players[0].sprite.getGlobalBounds().width / 186;
+            playersScale_y[2] = players[0].sprite.getGlobalBounds().height / 166;
+            for (int i = 0; i < 3; i++)
+            {
+                MaximizeCheck1[i] = 0;
+                MaximizeCheck2[i] = 0;
+            }
+            for (int i = 0; i < 3; i++)
+            {
+                players[i].score = 0;
+                players[i].health = 3;
+            }
+
+            // Reset Result Board
+            for (int i = 0; i < 3; i++)
+            {
+                f1NumberEaten[i] = 0;
+                f2NumberEaten[i] = 0;
+                f3NumberEaten[i] = 0;
+                starsNumberEaten[i] = 0;
+                finishingTime[i] = 0;
+                endPerfect[i] = 0;
+                PerfectTime[i] = { 0 };
+                endPerfect[i] = 0;
+                background[i].setPosition(0, 127);
+            }
+            for (int i = 0; i < 3; i++)
+            {
+                for (int j = 0; j < 3; j++)
+                    numbersEatenText[i][j].setScale(0, 0);
+                ScoreBoard[i].setScale(0, 0);
+                numberStarsEatenText[i].setScale(0, 0);
+            }
+            for (int i = 0; i < 3; i++)
+            {
+                players[i].dieCheck = 0;
+                players[i].dieTimer = 0;
+            }
+
+
+            // Reset Perfect And Sorry Effect
+            Perfect[0][0].setPosition(301, 505);
+            Perfect[0][0].setScale(0, 0);
+            Bubs[0][0].setScale(0, 0);
+            Bubs[0][0].setPosition(301, 545);
+            for (int i = 1; i < 7; i++)
+            {
+                Bubs[0][i].setScale(0, 0);
+                Bubs[0][i].setPosition(Bubs[0][i].getPosition().x, 545);
+                Perfect[0][i].setScale(0, 0);
+                Perfect[0][i].setPosition(Perfect[0][i].getPosition().x, 505);
+            }
+            for (int i = 1; i < 3; i++)
+            {
+                for (int j = 0; j < 7; j++)
+                {
+                    Perfect[i][j] = Perfect[0][j];
+                    Bubs[i][j] = Bubs[0][j];
+                }
+                endPerfect[i] = 0;
+                PerfectTime[i] = 0;
+            }
+
+            Sorry[0][0].setPosition(Sorry[0][0].getPosition().x, 505);
+            Sorry[0][0].setScale(0, 0);
+            Bubs1[0][0].setPosition(340, 545);
+            Bubs1[0][0].setScale(0, 0);
+            for (int i = 1; i < 5; i++)
+            {
+                Bubs1[0][i].setScale(0, 0);
+                Bubs1[0][i].setPosition(Bubs1[0][i].getPosition().x, 545);
+                Sorry[0][i].setScale(0, 0);
+                Sorry[0][i].setPosition(Sorry[0][i].getPosition().x, 505);
+            }
+            for (int i = 1; i < 3; i++)
+            {
+                for (int j = 0; j < 5; j++)
+                {
+                    Sorry[i][j] = Sorry[0][j];
+                    Bubs1[i][j] = Bubs1[0][j];
+                }
+                endSorry[i] = 0;
+                SorryTime[i] = 0;
+            }
+
+            userNumber++;
+
+            // Reset Times , Checks
+            for (int i = 0; i < 3; i++)
+            {
+                finishingTime[i] = 0;
+                losingCheck[i] = 0;
+                winingCheck[i] = 0;
+                levelTime[i] = 0;
+                resultTime[i] = 0;
+            }
+            for (int i = 0; i < 3; i++)
+            {
+                OnFire1Check[i] = 0;
+                OnFire1Score[i] = 1;
+                OnFire1ScorePrev[i] = 1;
+            }
+
+
+            // Reset velocity and Stars and all stars items
+            for (int i = 0; i < 3; i++)
+            {
+                mouseVelocity_x[i] = 0;
+                mouseVelocity_y[i] = 0;
+
+                T1[i].clear();
+                stars[i].clear();
+                sparks1[i].clear();
+                smallStars[i].clear();
+                speeds.clear();
+                smallStarsTimers[i].clear();
+                counter[i].clear();
+                countSpark1[i].clear();
+                sparksTimer[i].clear();
+            }
+
+            // Reset All BackGround Items
+            items[0][0].setPosition(550, window.getSize().y - 108 * 1.4 + 127);
+            items[0][1].setPosition(270, items[0][1].getPosition().y);
+            items[0][2].setPosition(800, windowHeight - 180 + 127);
+            items[0][3].setPosition(640, items[0][2].getPosition().y);
+            items[0][4].setPosition(200, windowHeight + 145 - 110 * 1.3);
+            items[0][5].setPosition(1100, windowHeight + 145 - 115);
+            items[0][6].setPosition(-61, 820);
+            items[2][0].setPosition(680, windowHeight - 133 * 1.4 + 127);
+            items[2][1].setPosition(1350, windowHeight - 144 * 1.5 + 150);
+            items[2][2].setPosition(1100, 950);
+            items[2][3].setPosition(-80, windowHeight - 146 * 1.3 + 150);
+            items[2][4].setPosition(-6, windowHeight + 150 - 80);
+        }
+        gameStatePrevious = gameState;
+
+        window.clear();
+
+
+        // Draw 
+        if (gameState == 0)
+        {
+            window.draw(sprites[0]);
+            window.draw(sprites[1]);
+            if (b1l == 1)
+                window.draw(sprites[8]);
+            else
+                window.draw(sprites[2]);
+            if (b2l == 1)
+                window.draw(sprites[9]);
+            else
+                window.draw(sprites[3]);
+            if (b3l == 1)
+                window.draw(sprites[10]);
+            else
+                window.draw(sprites[4]);
+            if (b4l == 1)
+                window.draw(sprites[11]);
+            else
+                window.draw(sprites[5]);
+        }
+        else if (gameState == 1)
+        {
+            window.draw(sprites[17]);
+            window.draw(escapeButton);
+            window.draw(muteButton);
+            if (isMuted)
+                window.draw(sprites[18]);
+            else
+                window.draw(sprites[19]);
+        }
+        else if (gameState == 2) {
+            displayLeaderboard(window);
+        }
+        else if (gameState == 3) {
+        }
+        else if (gameState == 4)
+        {
+            window.draw(escapeButton);
+            window.draw(sprites[14]);
+            window.draw(sprites[16]);
+            window.draw(sprites[20]);
+
+            if (b5l == 1)
+                window.draw(sprites[6]);
+            else
+                window.draw(sprites[12]);
+            if (b12l == 1)
+                window.draw(sprites[21]);
+            else
+                window.draw(sprites[22]);
+            if (b6l == 1)
+                window.draw(sprites[7]);
+            else
+                window.draw(sprites[13]);
+
+            window.draw(l1Button);
+            window.draw(l2Button);
+            window.draw(l3Button);
+        }
+        else if (gameState == 5 || gameState == 6 || gameState == 7)
+        { // Draw the game
+
+            if (finishingTime[gameState - 5] <= 200)  // Still in game condition
+            {
+                window.setView(view[gameState - 5]);
+                window.draw(background[gameState - 5]);
+                if (gameState == 5)
+                {
+                    window.draw(items[0][6]);
+                    window.draw(items[0][2]);
+                    window.draw(items[0][3]);
+                    window.draw(items[0][0]);
+                    window.draw(items[0][1]);
+                    window.draw(oyster);
+                    if (crystals1.size() == 1)
+                        window.draw(crystals1[0]);
+                    window.draw(players[0].sprite);
+                    window.draw(items[0][5]);
+                    window.draw(items[0][4]);
+                }
+                else if (gameState == 6)
+                {
+                    window.draw(players[1].sprite);
+                }
+                else if (gameState == 7)
+                {
+                    window.draw(items[2][4]);
+                    window.draw(items[2][0]);
+                    window.draw(players[2].sprite);
+                    window.draw(items[2][1]);
+                    window.draw(items[2][2]);
+                    window.draw(items[2][3]);
+                }
+
+
+                for (int i = 0; i < enemy[gameState - 5][0].enemies.size(); i++)
+                    window.draw(enemy[gameState - 5][0].enemies[i]);
+
+                for (int i = 0; i < enemy[gameState - 5][1].enemies.size(); i++)
+                    window.draw(enemy[gameState - 5][1].enemies[i]);
+
+                for (int i = 0; i < enemy[gameState - 5][2].enemies.size(); i++)
+                    window.draw(enemy[gameState - 5][2].enemies[i]);
+
+                if (EB == 1)
+                    for (int i = 0; i < 5; i++)
+                        window.draw(bubbles[i]);
+                for (int i = 0; i < BubblesInBack.size(); i++)
+                {
+                    window.draw(BubblesInBack[i]);
+                }
+                if (OnFire1Check[gameState - 5] == 1)
+                    window.draw(Yum);
+                if (OnFire1Check[gameState - 5] == 1)
+                    window.draw(Gulb);
+
+
+                for (int i = 0; i < stars[gameState - 5].size(); i++)
+                    window.draw(stars[gameState - 5][i]);
+
+                for (int i = 0; i < smallStars[gameState - 5].size(); i++)
+                    window.draw(smallStars[gameState - 5][i]);
+
+                for (int i = 0; i < sparks1[gameState - 5].size(); i++)
+                    window.draw(sparks1[gameState - 5][i]);
+
+                for (int i = 0; i < speeds.size(); i++)
+                    window.draw(speeds[i]);
+
+                if (gameState == 5)
+                {
+                    for (int i = 0; i < booms.size(); i++)
+                        window.draw(booms[i]);
+
+                    window.draw(boomEffects);
+                }
+
+                // Abdo Draw ----------------------------
+
+
+                window.setView(window.getDefaultView());
+                window.draw(rectangle);
+                window.draw(line);
+                window.draw(line_GROWTH);
+                window.draw(line_ABILITY);
+                window.draw(triangle);
+                window.draw(triangle2);
+                for (int i = 0; i < 4; i++)
+                    window.draw(tab[i]);
+                for (int i = 0; i < 3; i++)
+                    window.draw(display_fishs[gameState - 5][i]);
+
+                window.draw(menu);
+                window.draw(GROWTH);
+                window.draw(SCORE);
+                window.draw(SCORE_0);
+                window.draw(ABILTY);
+               // window.draw(Bub);
+               // window.draw(Bub2);
+                for (int i = 0; i < 3; i++) {
+
+
+                    window.draw(display_bubbles[gameState - 5][i]);
+                }
+                window.draw(Doublect);
+                window.draw(Doublect2);
+                window.draw(triple_tab);
+                window.draw(hb);
+
+
+                // ---------------------------------------
+
+                window.draw(OnFireText);
+                for (int i = 0; i < T1[gameState - 5].size(); i++)
+                {
+                    window.draw(T1[gameState - 5][i]);
+                }
+
+                for (int i = 0; i < 7; i++)
+                {
+                    window.draw(Perfect[gameState - 5][i]);
+                    window.draw(Bubs[gameState - 5][i]);
+
+                }
+                for (int i = 0; i < 5; i++)
+                {
+                    window.draw(Sorry[gameState - 5][i]);
+                    window.draw(Bubs1[gameState - 5][i]);
+
+                }
+            }
+            else
+            {
+                if (winingCheck[gameState - 5] == 1)
+                {
+                    window.setView(window.getDefaultView());
+                    background[gameState - 5].setPosition(0, 0);
+                    window.draw(background[gameState - 5]);
+                    window.draw(resultBoard);
+                    window.draw(Title);
+                    for (int i = 0; i < 3; i++)
+                    {
+                        window.draw(enemeisBoard[gameState - 5][i]);
+                    }
+                    window.draw(starBoard);
+                    for (int i = 0; i < 3; i++)
+                    {
+                        window.draw(numbersEatenText[gameState - 5][i]);
+                    }
+                    window.draw(numberStarsEatenText[gameState - 5]);
+                    window.draw(stageCompleted);
+                    if (resultTime[gameState - 5] < 150)
+                        window.draw(Chomp);
+                    if (ContinueSelctedCheckWining == 0)
+                        window.draw(ContinueUnSelctedWining);
+                    else
+                        window.draw(ContinueSelctedWining);
+
+                    window.draw(conutinueTextWining);
+                    window.draw(ScoreBoard[gameState - 5]);
+                }
+                else if (losingCheck[gameState - 5] == 1)
+                {
+                    window.setView(window.getDefaultView());
+                    background[0].setPosition(0, 0);
+                    window.draw(background[0]);
+                    window.draw(GameOver);
+
+                    if (ContinueSelctedCheckLosing == 1)
+                        window.draw(ContinueSelctedLosing);
+                    else
+                        window.draw(ContinueUnSelctedLosing);
+
+                    if (QuitSelctedCheck == 1)
+                        window.draw(QuitButtonSelected);
+                    else
+                        window.draw(QuitButtonUnSelected);
+
+                    window.draw(conutinueTextLosing);
+                    window.draw(QuitText);
+
+                }
+
+            }
+            if (levelTime[gameState - 5] < 1200)
+                window.draw(Pbutton);
+
+        }
+
+        else if (gameState == 8)
+        { // Draw the pause menu
+            window.draw(sprites[17]);
+            window.draw(levelButton);
+            window.draw(mainmenuButton);
+            window.draw(continueButton);
+            window.draw(exitButton);
+        }
+        window.display();
+    }
+
+    return 0;
+}
